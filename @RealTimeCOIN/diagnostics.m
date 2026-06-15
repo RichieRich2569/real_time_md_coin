@@ -1,0 +1,22 @@
+function S = diagnostics(obj)
+    S = struct();
+    alignment = ensureContextAlignment(obj);
+    S.trial = obj.trial;
+    S.C = alignment.K;
+    S.context = globalSampledContexts(obj, alignment);
+    S.predicted_probabilities = globalContextWeights(obj, obj.D.predicted_probabilities, alignment);
+    S.responsibilities = globalContextWeights(obj, obj.D.responsibilities, alignment);
+    S.state_mean = globalContextMatrix(obj, obj.D.state_mean, alignment);
+    S.state_var = globalContextMatrix(obj, obj.D.state_var, alignment);
+    S.state_feedback_mean = globalContextMatrix(obj, obj.D.state_feedback_mean, alignment);
+    S.state_feedback_var = globalContextMatrix(obj, obj.D.state_feedback_var, alignment);
+    S.retention = globalContextMatrix(obj, obj.D.retention, alignment);
+    S.drift = globalContextMatrix(obj, obj.D.drift, alignment);
+    S.bias = globalContextMatrix(obj, obj.D.bias, alignment);
+    S.global_transition_probabilities = globalContextMatrix(obj, obj.D.global_transition_probabilities, alignment);
+    S.local_transition_matrix = globalTransitionTensor(obj, obj.D.local_transition_matrix, alignment);
+    S.global_cue_probabilities = obj.D.global_cue_probabilities(:, alignment.modal_particle_indices);
+    S.local_cue_matrix = globalCueTensor(obj, obj.D.local_cue_matrix, alignment);
+    S.alignment = alignment;
+    S.raw = obj.D;
+end
