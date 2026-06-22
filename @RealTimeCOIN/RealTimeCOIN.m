@@ -11,6 +11,12 @@ classdef RealTimeCOIN < handle
         num_particles (1,1) double {mustBeInteger,mustBePositive} = 100;
         max_contexts (1,1) double {mustBeInteger,mustBePositive} = 10;
 
+        % Dimensionality of the latent state (and, since the observation map
+        % is the identity, of the observation as well). state_dim == 1 selects
+        % the original scalar pipeline verbatim; state_dim > 1 selects the
+        % multi-dimensional pipeline. See observe_y.m for the dispatch.
+        state_dim (1,1) double {mustBeInteger,mustBePositive} = 1;
+
         gamma_context (1,1) double {mustBeNonnegative} = 0.1;
         alpha_context (1,1) double {mustBePositive} = 8.955;
         rho_context (1,1) double {mustBeNonnegative,mustBeLessThan(rho_context,1)} = 0.2501;
@@ -27,6 +33,15 @@ classdef RealTimeCOIN < handle
         sigma_process_noise (1,1) double {mustBeNonnegative} = 0.0089;
         sigma_sensory_noise (1,1) double {mustBeNonnegative} = 0.03;
         sigma_motor_noise (1,1) double {mustBeNonnegative} = 0.0;
+
+        % Optional explicit noise covariances for the multi-dimensional model.
+        % Leave empty ([]) to use the isotropic defaults derived from the
+        % scalar sigma_* properties: Q = sigma_process_noise^2 * I and
+        % R = (sigma_sensory_noise^2 + sigma_motor_noise^2) * I. When supplied
+        % they must be symmetric positive-semidefinite state_dim-by-state_dim
+        % matrices (validated at construction). Ignored when state_dim == 1.
+        process_noise_covariance double = [];
+        observation_noise_covariance double = [];
 
         infer_bias (1,1) logical = false;
     end
@@ -52,6 +67,7 @@ classdef RealTimeCOIN < handle
             for k = 1:2:nargin
                 obj.(varargin{k}) = varargin{k+1};
             end
+            validateMultiDimConfig(obj);
             resetParticles(obj);
         end
 

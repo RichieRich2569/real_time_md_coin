@@ -1,4 +1,12 @@
 function resetParticles(obj)
+    % Dispatch to the multi-dimensional initialiser when state_dim > 1; the
+    % scalar branch below is left exactly as in the original implementation
+    % so that the default (state_dim == 1) behaviour is unchanged.
+    if obj.state_dim > 1
+        resetParticlesMD(obj);
+        return;
+    end
+
     Cmax = obj.max_contexts + 1;
     P = obj.num_particles;
     D = struct();
