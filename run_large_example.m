@@ -23,7 +23,7 @@ grid = linspace(-1.5, 1.5, 101);
 tic;
 for t = 1:length(observations)
     coin.observe_y(observations(t));
-    probs = coin.context_probabilities();
+    probs = coin.context_responsibilities();
     ctx_probs(t, 1:length(probs)) = cell2mat(probs.values);
     % compute predicted state mean and variance
     dens = coin.state_probability(grid);

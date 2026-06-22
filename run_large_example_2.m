@@ -1,4 +1,4 @@
-% Run example over 500 trials, similarly to original coin tests
+% Run example over 500 trials, similarly to coin-rl tests
 clear; clc;
 
 % Add path to this directory if necessary

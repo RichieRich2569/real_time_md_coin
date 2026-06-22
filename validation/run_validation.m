@@ -1,16 +1,91 @@
-function results = run_validation
-%RUN_VALIDATION Run compact RealTimeCOIN validation checks.
+function results = run_validation(varargin)
+%RUN_VALIDATION Run the compact RealTimeCOIN validation suite.
 %
-%   These checks are intentionally smaller than a publication-scale
-%   calibration run. Increase NumDatasets/Trials in the individual
-%   functions for long validation.
+%   results = RUN_VALIDATION() runs a deliberately compact scientific
+%   validation suite.  These scripts report metrics and pass flags rather
+%   than acting like fast unit tests.  Increase the arguments in individual
+%   validators for publication-scale calibration runs.
+
+ip = inputParser;
+addParameter(ip, 'Profile', 'compact');
+addParameter(ip, 'MakePlots', false);
+addParameter(ip, 'Seed', 1001);
+addParameter(ip, 'Strict', false);
+parse(ip, varargin{:});
+cfg = ip.Results;
 
 rootDir = fileparts(fileparts(mfilename('fullpath')));
 addpath(rootDir);
 addpath(fullfile(rootDir, 'validation'));
 
+switch lower(cfg.Profile)
+    case 'compact'
+        suite = compact_config(cfg);
+    otherwise
+        error('run_validation:UnknownProfile', ...
+            'Unknown validation profile "%s".', cfg.Profile);
+end
+
 results = struct();
-results.p_values = validate_p_values('NumDatasets', 25, 'Trials', 80, 'Particles', 100);
-results.original_comparison = compare_original_coin('Trials', 60, 'Particles', 100);
-results.performance = benchmark_realtimecoin('Trials', 80, 'Particles', [50 100]);
+results.config = cfg;
+results.single_context_kalman = validate_single_context_kalman( ...
+    'Trials', suite.kalman_trials, 'Particles', suite.kalman_particles, ...
+    'Seed', cfg.Seed + 10, 'MakePlots', cfg.MakePlots, 'Strict', cfg.Strict);
+results.p_values_extended = validate_p_values_extended( ...
+    'NumDatasets', suite.pit_datasets, 'Trials', suite.pit_trials, ...
+    'Particles', suite.pit_particles, 'Seed', cfg.Seed + 20, ...
+    'MakePlots', cfg.MakePlots, 'Strict', cfg.Strict);
+results.original_coin_monte_carlo = validate_original_coin_monte_carlo( ...
+    'Seeds', cfg.Seed + (30:34), 'Trials', suite.original_trials, ...
+    'Particles', suite.original_particles, 'Strict', cfg.Strict);
+results.particle_convergence = validate_particle_convergence( ...
+    'Particles', suite.convergence_particles, 'Trials', suite.convergence_trials, ...
+    'NumDatasets', suite.convergence_datasets, 'Seed', cfg.Seed + 40, ...
+    'Strict', cfg.Strict);
+results.context_recovery = validate_context_recovery( ...
+    'Trials', suite.context_trials, 'Particles', suite.context_particles, ...
+    'Seed', cfg.Seed + 50, 'Strict', cfg.Strict);
+results.stress_cases = validate_stress_cases( ...
+    'Trials', suite.stress_trials, 'Particles', suite.stress_particles, ...
+    'Seed', cfg.Seed + 60, 'Strict', cfg.Strict);
+results.performance = benchmark_realtimecoin( ...
+    'Trials', suite.benchmark_trials, 'Particles', suite.benchmark_particles, ...
+    'Seed', cfg.Seed + 70);
+
+% Compatibility aliases retained for existing scripts/notebooks.
+results.p_values = results.p_values_extended;
+results.original_comparison = results.original_coin_monte_carlo;
+
+results.passed = results.single_context_kalman.passed && ...
+    results.p_values_extended.passed && ...
+    results.original_coin_monte_carlo.passed && ...
+    results.particle_convergence.passed && ...
+    results.context_recovery.passed && ...
+    results.stress_cases.passed;
+
+fprintf('Compact validation suite passed: %d\n', results.passed);
+
+if cfg.Strict && ~results.passed
+    error('run_validation:Failed', 'One or more validation checks failed.');
+end
+end
+
+function suite = compact_config(~)
+suite = struct();
+suite.kalman_trials = 80;
+suite.kalman_particles = 180;
+suite.pit_datasets = 18;
+suite.pit_trials = 70;
+suite.pit_particles = 100;
+suite.original_trials = 60;
+suite.original_particles = 100;
+suite.convergence_particles = [25 50 100];
+suite.convergence_trials = 45;
+suite.convergence_datasets = 4;
+suite.context_trials = 100;
+suite.context_particles = 120;
+suite.stress_trials = 75;
+suite.stress_particles = 80;
+suite.benchmark_trials = 80;
+suite.benchmark_particles = [50 100];
 end
