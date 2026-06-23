@@ -1,4 +1,5 @@
 function densities = state_probability(obj, values)
+    obj.assertScalarOnly('state_probability');
     values = values(:)';
     densities = zeros(size(values));
     W = obj.D.responsibilities;

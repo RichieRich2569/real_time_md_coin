@@ -1,4 +1,8 @@
 function S = diagnostics(obj)
+    if obj.state_dim > 1
+        S = diagnosticsMD(obj);
+        return;
+    end
     S = struct();
     alignment = ensureContextAlignment(obj);
     S.trial = obj.trial;

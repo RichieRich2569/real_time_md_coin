@@ -1,4 +1,8 @@
 function prototypes = updateGlobalContexts(obj, Km, modalIdx, weights, assignment)
+    if obj.state_dim > 1
+        prototypes = obj.updateGlobalContextsMD(Km, modalIdx, weights, assignment);
+        return;
+    end
     modalIdx = modalIdx(:)';
     weights = weights(:)';
     weights = weights ./ sum(weights);

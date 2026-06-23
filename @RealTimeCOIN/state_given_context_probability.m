@@ -1,4 +1,5 @@
 function densities = state_given_context_probability(obj, values)
+    obj.assertScalarOnly('state_given_context_probability');
     values = values(:)';
     densities = containers.Map('KeyType', 'double', 'ValueType', 'any');
     alignment = ensureContextAlignment(obj);

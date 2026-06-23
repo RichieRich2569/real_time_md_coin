@@ -1,4 +1,8 @@
 function cost = assignmentCostMatrix(obj, p, Km, prototypes, assignment, includeTransition)
+    if obj.state_dim > 1
+        cost = obj.assignmentCostMatrixMD(p, Km, prototypes, assignment, includeTransition);
+        return;
+    end
     cost = zeros(Km, Km);
     for local = 1:Km
         [dynMean, dynCovar] = obj.localDynamicsDistribution(local, p);

@@ -18,7 +18,7 @@ coin2 = RealTimeCOIN('num_particles', 1); % dummy initialisation
 coin2.loadModel(tmpfile);
 
 assert(coin2.Trial == 0, 'Trial count should reset to zero after stationary save');
-probs = coin2.context_probabilities();
+probs = coin2.context_responsibilities();
 keys = probs.keys;
 assert(numel(keys) == 1 && keys{1} == 1, 'After reset only context 1 should be present');
 
@@ -29,8 +29,8 @@ coin.saveModel(tmpfile, false);
 coin3 = RealTimeCOIN('num_particles', 1);
 coin3.loadModel(tmpfile);
 assert(coin3.Trial == coin.Trial, 'Trial count mismatch after save/load');
-probs_old = coin.context_probabilities();
-probs_new = coin3.context_probabilities();
+probs_old = coin.context_responsibilities();
+probs_new = coin3.context_responsibilities();
 keys_old = probs_old.keys;
 keys_new = probs_new.keys;
 assert(numel(keys_old) == numel(keys_new), 'Context key count mismatch');

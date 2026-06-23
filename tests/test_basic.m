@@ -6,14 +6,14 @@ rng(1);
 % Initialize with few particles
 coin = RealTimeCOIN('num_particles', 20, 'max_contexts', 3);
 % Initially, all particles in context 1
-probs = coin.context_probabilities();
+probs = coin.context_responsibilities();
 assert(numel(probs.keys) == 1, 'Initial context count mismatch');
 assert(abs(probs(1) - 1.0) < 1e-12, 'Initial context probability not 1');
 
 % Perform a single observation
 coin.observe_q(1);
 coin.observe_y(0.2);
-probs = coin.context_probabilities();
+probs = coin.context_responsibilities();
 total = 0;
 ks = probs.keys;
 for i = 1:numel(ks)

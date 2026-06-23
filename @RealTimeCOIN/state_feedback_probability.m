@@ -1,4 +1,5 @@
 function densities = state_feedback_probability(obj, values)
+    obj.assertScalarOnly('state_feedback_probability');
     values = values(:)';
     densities = zeros(size(values));
     W = obj.D.predicted_probabilities;

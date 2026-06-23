@@ -1,4 +1,5 @@
 function p = predictive_state_feedback_cdf(obj, y, q)
+    obj.assertScalarOnly('predictive_state_feedback_cdf');
     if nargin < 3
         q = obj.pending_q;
     end
