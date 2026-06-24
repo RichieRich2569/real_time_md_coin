@@ -11,4 +11,5 @@ function state = serializableState(obj)
     state.trial = obj.trial;
     state.cue_values = obj.cue_values;
     state.state_version = obj.state_version;
+    state.alignment_seed = obj.alignment_seed;
 end

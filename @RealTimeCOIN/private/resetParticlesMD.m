@@ -91,5 +91,6 @@ function resetParticlesMD(obj)
     obj.D = D; %#ok<*PROP>
     obj.updateLocalTransitionMatrix();
     obj.updateLocalCueMatrix();
+    obj.alignment_seed = [];
     obj.invalidateContextAlignment();
 end

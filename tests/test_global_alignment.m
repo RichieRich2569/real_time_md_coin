@@ -39,6 +39,24 @@ assert(a1.cache_state_version == a2.cache_state_version, 'Repeated alignment cal
 coinLazy.observe_y(0.2);
 a3 = coinLazy.context_alignment();
 assert(a3.cache_state_version ~= a1.cache_state_version, 'A new observation should invalidate the alignment cache');
+
+coinWarm = alignmentFixture(false);
+w1 = coinWarm.context_alignment();
+diagWarm = coinWarm.diagnostics();
+rawWarm = diagWarm.raw;
+warmTemplate = RealTimeCOIN('num_particles', 3, 'max_contexts', 3);
+coinWarmSeeded = loadFixtureModel(warmTemplate, rawWarm, w1);
+w2 = coinWarmSeeded.context_alignment();
+assert(w2.used_seed, 'Post-update alignment should warm-start from the previous seed');
+assert(isequal(w1.assignment(1:2,1:3), w2.assignment(1:2,1:3)), ...
+    'Warm-started alignment should preserve stable label order');
+
+coinTen = largeAssignmentFixture();
+ten = coinTen.context_alignment();
+assert(ten.K == 10, 'Large fixture should align ten contexts');
+expected = 10:-1:1;
+assert(isequal(ten.assignment(1:10,2)', expected), ...
+    'Ten-context assignment did not recover the known reverse permutation');
 end
 
 function coin = alignmentFixture(includeNonModal)
@@ -156,7 +174,10 @@ end
 coin = loadFixtureModel(template, D);
 end
 
-function coin = loadFixtureModel(template, D)
+function coin = loadFixtureModel(template, D, alignmentSeed)
+if nargin < 3
+    alignmentSeed = [];
+end
 model = struct();
 model.properties = struct();
 props = properties(template);
@@ -170,10 +191,72 @@ model.pending_q = [];
 model.trial = 1;
 model.cue_values = 1;
 model.state_version = 1;
+model.alignment_seed = alignmentSeed;
 
 tmpfile = [tempname, '.mat'];
 save(tmpfile, 'model');
 coin = RealTimeCOIN('num_particles', 1);
 coin.loadModel(tmpfile);
 delete(tmpfile);
+end
+
+function coin = largeAssignmentFixture()
+P = 2;
+maxContexts = 10;
+Cmax = maxContexts + 1;
+template = RealTimeCOIN('num_particles', P, 'max_contexts', maxContexts);
+diagState = template.diagnostics();
+D = diagState.raw;
+
+D.C = maxContexts * ones(1, P);
+D.context = ones(1, P);
+D.previous_context = D.context;
+D.Q = 1;
+D.n_cue = zeros(Cmax, 1, P);
+D.global_cue_probabilities = ones(1, P);
+D.state_filtered_mean = zeros(Cmax, P);
+D.state_filtered_var = 0.01 * ones(Cmax, P);
+D.state_mean = D.state_filtered_mean;
+D.state_var = D.state_filtered_var;
+D.state_feedback_mean = D.state_filtered_mean;
+D.state_feedback_var = D.state_filtered_var;
+D.retention = zeros(Cmax, P);
+D.drift = zeros(Cmax, P);
+D.bias = zeros(Cmax, P);
+D.bias_mean = zeros(Cmax, P);
+D.bias_var = ones(Cmax, P);
+D.dynamics_mean = zeros(2, Cmax, P);
+D.dynamics_covar = repmat(eye(2), 1, 1, Cmax, P);
+D.local_cue_matrix = ones(Cmax, 1, P);
+D.local_transition_matrix = zeros(Cmax, Cmax, P);
+D.global_transition_probabilities = zeros(Cmax, P);
+D.predicted_probabilities = zeros(Cmax, P);
+D.responsibilities = zeros(Cmax, P);
+D.prior_probabilities = zeros(Cmax, P);
+D.probability_cue = ones(Cmax, P);
+D.probability_state_feedback = ones(Cmax, P);
+
+for p = 1:P
+    if p == 1
+        localToGlobal = 1:10;
+    else
+        localToGlobal = 10:-1:1;
+    end
+    for local = 1:10
+        globalIdx = localToGlobal(local);
+        D.state_filtered_mean(local, p) = globalIdx;
+        D.state_mean(local, p) = globalIdx;
+        D.state_feedback_mean(local, p) = globalIdx;
+        D.retention(local, p) = 0.5 + 0.01 * globalIdx;
+        D.drift(local, p) = 0.1 * globalIdx;
+        D.dynamics_mean(:, local, p) = [D.retention(local, p); D.drift(local, p)];
+        D.local_transition_matrix(local, local, p) = 1;
+        D.global_transition_probabilities(local, p) = 0.1;
+        D.predicted_probabilities(local, p) = 0.1;
+        D.responsibilities(local, p) = 0.1;
+        D.prior_probabilities(local, p) = 0.1;
+    end
+end
+
+coin = loadFixtureModel(template, D);
 end

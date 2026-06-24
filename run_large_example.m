@@ -14,26 +14,20 @@ observations = true_perturbations + coin.sigma_sensory_noise * randn(size(true_p
 
 % Prepare values for plotting
 predicted_means = zeros(size(observations));
-ctx_probs = zeros(length(observations), coin.max_contexts);
+ctxWidth = coin.max_contexts + 1;
+ctx_probs = zeros(length(observations), ctxWidth);
 state_probabilities = zeros(length(observations), 101); % for grid of 101 points
-state_given_ctx_probs = zeros(length(observations), coin.max_contexts, 101); % for grid of 101 points
 
 grid = linspace(-1.5, 1.5, 101);
 
 tic;
 for t = 1:length(observations)
     coin.observe_y(observations(t));
-    probs = coin.context_responsibilities();
-    ctx_probs(t, 1:length(probs)) = cell2mat(probs.values);
+    probs = coin.context_responsibilities_local();
+    ctx_probs(t, 1:numel(probs)) = probs;
     % compute predicted state mean and variance
     dens = coin.state_probability(grid);
     state_probabilities(t, :) = dens;
-    state_given_ctx_container = coin.state_given_context_probability(grid); % Returns containers.Map
-    % Print keys in container
-    keys = state_given_ctx_container.keys;
-    for k = 1:length(keys)
-        state_given_ctx_probs(t, keys{k}, :) = state_given_ctx_container(keys{k});
-    end
     % normalise density
     area = trapz(grid, dens);
     if area > 0
@@ -59,32 +53,19 @@ legend('Predicted', 'Observed', 'True');
 figure;
 plot(1:length(observations), ctx_probs);
 xlabel('Trial');
-ylabel('Context Probability');
-legend(arrayfun(@(k) sprintf('Context %d', k), 1:coin.max_contexts, 'UniformOutput', false));
+ylabel('Local/modal Context Probability');
+legend(arrayfun(@(k) sprintf('Local %d', k), 1:ctxWidth, 'UniformOutput', false));
 
-% Plot state probabilities given context over trials for each context as heatmap with different colours for different
-% contexts in a single axis
+% Plot final exact state probabilities given globally aligned context.
+state_given_ctx_container = coin.state_given_context_probability(grid);
+keys = state_given_ctx_container.keys;
 figure;
-colors = lines(coin.max_contexts);
-combined_rgb = zeros(length(grid), length(observations), 3);
-for k = 1:coin.max_contexts
-    prob_data = squeeze(state_given_ctx_probs(:, k, :))';
-    % Normalize to [0, 1] for this context
-    prob_max = max(prob_data(:));
-    if prob_max > 0
-        prob_data = prob_data / prob_max;
-    end
-    % Add weighted contribution to combined image
-    for c = 1:3
-        combined_rgb(:, :, c) = combined_rgb(:, :, c) + prob_data * colors(k, c);
-    end
+hold on;
+for k = 1:length(keys)
+    plot(grid, state_given_ctx_container(keys{k}), 'LineWidth', 1.2);
 end
-% Normalize combined image to [0, 1]
-combined_rgb = combined_rgb / max(combined_rgb(:));
-imagesc(1:length(observations), grid, combined_rgb);
-set(gca, 'YDir', 'normal');
-xlabel('Trial');
-ylabel('State Value');
-title('State Probability Given Context');
-colorbar;
+xlabel('State Value');
+ylabel('Density');
+title('Final state probability given globally aligned context');
+legend(arrayfun(@(k) sprintf('Context %d', k), cell2mat(keys), 'UniformOutput', false));
 

@@ -12,5 +12,10 @@ function restoreSerializableState(obj, state)
     else
         obj.state_version = obj.trial;
     end
+    if isfield(state, 'alignment_seed')
+        obj.alignment_seed = state.alignment_seed;
+    else
+        obj.alignment_seed = [];
+    end
     obj.invalidateContextAlignment();
 end

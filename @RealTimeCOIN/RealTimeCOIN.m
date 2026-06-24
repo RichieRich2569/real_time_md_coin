@@ -52,6 +52,7 @@ classdef RealTimeCOIN < handle
         trial = 0;
         cue_values = [];
         alignment_cache = [];
+        alignment_seed = [];
         state_version = 0;
     end
 

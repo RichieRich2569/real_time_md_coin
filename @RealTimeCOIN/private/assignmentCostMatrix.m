@@ -1,6 +1,9 @@
-function cost = assignmentCostMatrix(obj, p, Km, prototypes, assignment, includeTransition)
+function cost = assignmentCostMatrix(obj, p, Km, prototypes, assignment, includeTransition, prepared)
+    if nargin < 7
+        prepared = [];
+    end
     if obj.state_dim > 1
-        cost = obj.assignmentCostMatrixMD(p, Km, prototypes, assignment, includeTransition);
+        cost = obj.assignmentCostMatrixMD(p, Km, prototypes, assignment, includeTransition, prepared);
         return;
     end
     cost = zeros(Km, Km);

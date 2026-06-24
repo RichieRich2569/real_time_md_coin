@@ -1,6 +1,6 @@
 %RUN_LARGE_MD_EXAMPLE Long-run demonstration of the multi-dimensional RealTimeCOIN.
 %
-%   Runs the N-dimensional model for 500 trials over a sequence of distinct
+%   Runs the N-dimensional model for 250 trials over a sequence of distinct
 %   4-D "constant contingencies" (each a different context), no cues and each with its own latent
 %   target variation.
 
@@ -26,7 +26,7 @@ coin = RealTimeCOIN('num_particles', 200, 'max_contexts', maxContexts, ...
 % 2. Context 2 is a slightly drifting value through trials, starting at (-0.5, 0.5, 0.5, -0.5) and drifting by (0.01, -0.01, 0.01, -0.01) per trial.
 % 3. Context 3 implements swapping values (retention matrix with off-diagonal elements) to create a more complex dynamic. Every trial, it swaps the first two dimensions with a starting value of (0.4, 0.2, -0.4, -0.4).
 % -------------------------------------------------------------------------
-blockLens   = [150 150 130 70];          % trial counts (sum = 500)
+blockLens   = [75 75 65 35];          % trial counts (sum = 250)
 
 T = sum(blockLens);
 trueState = zeros(N, T);
@@ -63,15 +63,15 @@ feedbacks = trueState + chol(Q)' * randn(N, T);
 % -------------------------------------------------------------------------
 postStateMean  = zeros(N, T);            % posterior E[state] each trial
 predFeedback   = zeros(N, T);            % one-step predictive feedback mean
-prevCtxProb    = zeros(T, Cwidth);       % predicted context probs (before y)
-postCtxProb    = zeros(T, Cwidth);       % context responsibilities (after y)
+prevCtxProb    = zeros(T, Cwidth);       % local/modal predicted context probs (before y)
+postCtxProb    = zeros(T, Cwidth);       % local/modal context responsibilities (after y)
 
 fprintf('Running 500-trial multi-dimensional COIN example (N=%d)...\n', N);
 tic;
 for t = 1:T
     % "Prev": predictive distributions before seeing the observation.
     predFeedback(:, t) = coin.predictive_feedback_moments();
-    pv = coin.predicted_context_probabilities();
+    pv = coin.predicted_context_probabilities_local();
     prevCtxProb(t, 1:numel(pv)) = pv;
 
     % Process the observation.
@@ -79,11 +79,8 @@ for t = 1:T
 
     % "Post": posterior state and context responsibilities after the update.
     postStateMean(:, t) = coin.state_moments();
-    respMap = coin.context_responsibilities();
-    ks = respMap.keys;
-    for i = 1:numel(ks)
-        postCtxProb(t, ks{i}) = respMap(ks{i});
-    end
+    rv = coin.context_responsibilities_local();
+    postCtxProb(t, 1:numel(rv)) = rv;
 
     fprintf("Finished trial %d/%d\n", t, T);
     fprintf("Elapsed time: %.2f s (%.1f ms/trial)\n", toc, 1e3*toc/t);
@@ -156,12 +153,12 @@ figure('Name', 'MD COIN: context probabilities');
 subplot(2, 1, 1);
 area(1:T, prevCtxProb(:, 1:max(K, 1)));
 xlabel('Trial'); ylabel('Predicted prob (prev)');
-title('Predicted context probabilities (before observation)');
+title('Local/modal predicted context probabilities (before observation)');
 ylim([0 1]);
 subplot(2, 1, 2);
 area(1:T, postCtxProb(:, 1:max(K, 1)));
 xlabel('Trial'); ylabel('Responsibility (post)');
-title('Context responsibilities (after observation)');
+title('Local/modal context responsibilities (after observation)');
 ylim([0 1]);
 legend(arrayfun(@(k) sprintf('Context %d', k), 1:max(K,1), 'UniformOutput', false), ...
     'Location', 'eastoutside');
