@@ -1,7 +1,14 @@
 function observe_y(obj, y)
-    if isempty(y) || (isnumeric(y) && isscalar(y) && isnan(y))
+    % y must be empty or a numeric value with dim = obj.state_dim.
+    arguments
+        obj (1, 1) RealTimeCOIN
+        y (:, 1) double {mustBeNumeric} = []
+    end
+    if isempty(y) || (isnumeric(y) && isscalar(y) && anynan(y))
+        % TODO: Having one dimension being NaN means inference has to be done with other non-nan values.
         y_val = [];
     else
+        mustBeStateDim(obj.state_dim, y);
         y_val = y;
     end
 
@@ -35,4 +42,13 @@ function observe_y(obj, y)
 
     obj.trial = obj.trial + 1;
     invalidateContextAlignment(obj);
+end
+
+function mustBeStateDim(dim, y)
+    % Test for equal size
+    if ~isequal(dim,numel(y))
+        eid = 'Size:notStateDim';
+        msg = 'Size of observed y must match the state dimension.';
+        error(eid,msg)
+    end
 end
