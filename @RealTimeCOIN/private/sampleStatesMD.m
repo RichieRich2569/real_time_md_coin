@@ -1,4 +1,4 @@
-function sampleStatesMD(obj, y)
+function sampleStatesMD(obj, y, obsMask)
 %SAMPLESTATESMD Sample latent state trajectories (RTS smoother, multivariate).
 %
 %   Multi-dimensional counterpart of sampleStates.m. Two latent quantities
@@ -25,11 +25,23 @@ function sampleStatesMD(obj, y)
     Q = obj.processNoiseCov();
     R = obj.observationNoiseCov();
     Qi = obj.safeInverse(Q);
-    Ri = obj.safeInverse(R);
+    if nargin < 3 || isempty(obsMask)
+        obsMask = ~isnan(y(:));
+    else
+        obsMask = obsMask(:);
+    end
+    hasObservation = ~isempty(y) && any(obsMask);
+    if hasObservation
+        obsIdx = find(obsMask);
+        R_obs = R(obsIdx, obsIdx);
+        Ri_obs = obj.safeInverse(R_obs);
+        obsPrecision = zeros(N, N);
+        obsPrecision(obsIdx, obsIdx) = Ri_obs;
+    end
 
     obj.D.previous_x_dynamics = zeros(N, Cmax, P);
     obj.D.x_dynamics = zeros(N, Cmax, P);
-    if ~isempty(y)
+    if hasObservation
         yv = y(:);
     end
 
@@ -52,14 +64,16 @@ function sampleStatesMD(obj, y)
 
             % --- 2. Forward sample of the current state s_i ---
             dynMean = A * sPrev + d;
-            if isempty(y) || c ~= active
+            if ~hasObservation || c ~= active
                 postMean = dynMean;
                 postCov = Q;
             else
-                postCov = obj.safeInverse(Qi + Ri);
+                postCov = obj.safeInverse(Qi + obsPrecision);
                 postCov = (postCov + postCov') ./ 2;
                 bias = obj.D.bias(:, c, p);
-                postMean = postCov * (Qi * dynMean + Ri * (yv - bias));
+                obsInfo = zeros(N, 1);
+                obsInfo(obsIdx) = Ri_obs * (yv(obsIdx) - bias(obsIdx));
+                postMean = postCov * (Qi * dynMean + obsInfo);
             end
             obj.D.x_dynamics(:, c, p) = drawGaussian(obj, postMean, postCov);
         end

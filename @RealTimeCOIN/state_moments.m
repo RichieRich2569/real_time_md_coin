@@ -26,7 +26,7 @@ function [mu, v] = state_moments(obj)
     second = zeros(N, N);
     for p = 1:P
         for c = 1:Cmax
-            w = W(c, p) ./ P;
+            w = W(c, p) / P;
             if w == 0
                 continue;
             end

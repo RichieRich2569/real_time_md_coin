@@ -1,11 +1,27 @@
 classdef RealTimeCOIN < handle
     %REALTIMECOIN Sequential scalar COIN particle filter.
     %
-    %   The public API is intentionally small and state-machine like:
-    %   observe_q(q) records the cue for the next trial, observe_y(y)
-    %   processes the trial feedback, and query methods expose the current
-    %   posterior/predictive summaries. Internally, particles are stored in
-    %   vectorized arrays following the original COIN.m implementation.
+    %   The core API is state-machine like: observe_q(q) records the cue for the
+    %   next trial, observe_y(y) processes the trial feedback, and query methods
+    %   expose the current posterior/predictive summaries. Internally, particles
+    %   are stored in vectorized arrays following the original COIN.m
+    %   implementation.
+    %
+    %   Query methods mirror every quantity COIN.m is able to plot, evaluated at
+    %   the current trial. Distributions/densities: state_probability,
+    %   state_given_context_probability, novel_state_probability,
+    %   state_feedback_probability, state_feedback_given_context_probability,
+    %   novel_state_feedback_probability, retention_given_context_probability,
+    %   drift_given_context_probability, bias_given_context_probability,
+    %   bias_probability, local_transition_probabilities, local_cue_probabilities,
+    %   global_transition_probabilities, global_cue_probabilities,
+    %   stationary_context_probabilities. Probability vectors:
+    %   predicted_context_probabilities, responsibilities (and *_local variants),
+    %   sampled_context_count. Scalar summaries: motor_output, state_moments,
+    %   explicit_component, implicit_component, and the c* traces
+    %   state_cstar1/2/3, predicted_probability_cstar1/3, kalman_gain_cstar1/2.
+    %   Retention/drift/bias densities and scalar Kalman gains are scalar-model
+    %   only (state_dim == 1).
 
     properties
         num_particles (1,1) double {mustBeInteger,mustBePositive} = 100;

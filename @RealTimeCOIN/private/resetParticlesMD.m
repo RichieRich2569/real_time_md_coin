@@ -16,7 +16,8 @@ function resetParticlesMD(obj)
 %       bias             : N x Cmax x P
 %       Lambda_xx        : (N+1) x (N+1) x Cmax x P
 %       Lambda_yx        : N x (N+1) x Cmax x P
-%       bias_ss_1        : N x Cmax x P,   bias_ss_2 : Cmax x P (counts)
+%       bias_info_ss     : N x Cmax x P
+%       bias_precision_ss: N x N x Cmax x P
 
     N = obj.state_dim;
     Cmax = obj.max_contexts + 1;
@@ -38,8 +39,8 @@ function resetParticlesMD(obj)
     % --- Dynamics parameter sufficient statistics (matrix accumulators) ---
     D.Lambda_xx = zeros(N+1, N+1, Cmax, P);
     D.Lambda_yx = zeros(N, N+1, Cmax, P);
-    D.bias_ss_1 = zeros(N, Cmax, P);
-    D.bias_ss_2 = zeros(Cmax, P);
+    D.bias_info_ss = zeros(N, Cmax, P);
+    D.bias_precision_ss = zeros(N, N, Cmax, P);
 
     % --- Sample dynamics parameters Theta = [A | d] from the matrix-normal prior ---
     [M0, ~, V0] = obj.dynamicsPriorMD();

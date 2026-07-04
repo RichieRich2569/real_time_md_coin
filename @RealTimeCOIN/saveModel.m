@@ -4,10 +4,15 @@ function saveModel(obj, filename, setStationary)
     end
     if setStationary
         saved = serializableState(obj);
-        obj.set_stationary();
-        model = serializableState(obj);
-        save(filename, 'model');
-        restoreSerializableState(obj, saved);
+        try
+            obj.set_stationary();
+            model = serializableState(obj);
+            save(filename, 'model');
+            restoreSerializableState(obj, saved);
+        catch err
+            restoreSerializableState(obj, saved);
+            rethrow(err);
+        end
     else
         model = serializableState(obj);
         save(filename, 'model');

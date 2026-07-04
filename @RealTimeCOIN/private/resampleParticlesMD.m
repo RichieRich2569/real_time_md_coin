@@ -1,4 +1,4 @@
-function resampleParticlesMD(obj, y, q)
+function resampleParticlesMD(obj, y, q, obsMask)
 %RESAMPLEPARTICLESMD Weight and resample particles (multivariate likelihood).
 %
 %   Multi-dimensional counterpart of resampleParticles.m. The only change
@@ -12,17 +12,24 @@ function resampleParticlesMD(obj, y, q)
 
     P = obj.num_particles;
     Cmax = obj.max_contexts + 1;
+    if nargin < 4 || isempty(obsMask)
+        obsMask = ~isnan(y(:));
+    else
+        obsMask = obsMask(:);
+    end
+    hasObservation = ~isempty(y) && any(obsMask);
 
-    if isempty(y)
+    if ~hasObservation
         log_py = zeros(Cmax, P);
         py = ones(Cmax, P);
     else
         yv = y(:);
+        obsIdx = find(obsMask);
         log_py = zeros(Cmax, P);
         for p = 1:P
             for c = 1:Cmax
-                innovation = yv - obj.D.state_feedback_mean(:, c, p);
-                S = obj.D.state_feedback_cov(:, :, c, p);
+                innovation = yv(obsIdx) - obj.D.state_feedback_mean(obsIdx, c, p);
+                S = obj.D.state_feedback_cov(obsIdx, obsIdx, c, p);
                 log_py(c, p) = obj.gaussianLogLikChol(innovation, S);
             end
         end
@@ -34,7 +41,7 @@ function resampleParticlesMD(obj, y, q)
     if ~isempty(q)
         log_pc = log_pc + obj.safeLog(obj.D.probability_cue);
     end
-    if ~isempty(y)
+    if hasObservation
         % Add the log-likelihood directly (rather than log(exp(.))) for
         % numerical robustness when components underflow.
         log_pc = log_pc + log_py;
@@ -45,7 +52,7 @@ function resampleParticlesMD(obj, y, q)
     resp = exp(log_resp);
     resp(~isfinite(resp)) = 0;
 
-    if isempty(y) && isempty(q)
+    if ~hasObservation && isempty(q)
         idx = 1:P;
     else
         weights = exp(l_w - obj.log_sum_exp(l_w(:), 1));

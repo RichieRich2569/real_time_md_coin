@@ -13,9 +13,9 @@ function [mu, Sigma] = predictive_feedback_moments(obj, q)
 %   in-class, MD-capable counterpart of the scalar-only validation helper
 %   validation_predictive_feedback_moments and is used by the multi-
 %   dimensional Kalman validation to compute predictive calibration.
-
-    if nargin < 2
-        q = [];
+    arguments
+        obj (1, 1) RealTimeCOIN
+        q double {mustBeScalarOrEmpty, mustBeInteger, mustBeNonnegative} = []
     end
 
     Cmax = obj.max_contexts + 1;
@@ -77,7 +77,7 @@ function [mu, Sigma] = multiMoments(obj, weights, Cmax, P)
     for p = 1:P
         novel = min(obj.D.C(p) + 1, Cmax);
         for c = 1:Cmax
-            w = weights(c, p) ./ P;
+            w = weights(c, p) / P;
             if w == 0
                 continue;
             end
@@ -98,4 +98,11 @@ function [mu, Sigma] = multiMoments(obj, weights, Cmax, P)
     end
     Sigma = second - (mu * mu');
     Sigma = (Sigma + Sigma') ./ 2;
+end
+
+function mustBeScalarOrEmpty(x)
+    if ~(isempty(x) || isscalar(x))
+        error('RealTimeCOIN:InvalidCue', ...
+            'q must be empty or a scalar cue label.');
+    end
 end

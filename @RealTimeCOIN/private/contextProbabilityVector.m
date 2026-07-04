@@ -1,4 +1,8 @@
 function weights = contextProbabilityVector(obj, kind)
+    arguments
+        obj (1,1) RealTimeCOIN
+        kind {mustBeMember(kind, ["predicted", "responsibilities", "count"])} = "predicted"
+    end
     alignment = obj.ensureContextAlignment();
     switch kind
         case "predicted"

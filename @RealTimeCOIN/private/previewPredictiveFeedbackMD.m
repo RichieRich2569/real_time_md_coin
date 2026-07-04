@@ -17,6 +17,10 @@ function [W, M, Cov] = previewPredictiveFeedbackMD(obj, q)
 %       fbMean = s_pred + b,           fbCov  = P_pred + R.
 %   The first not-yet-instantiated ("novel") context uses the stationary
 %   prediction (stationaryStateMeanMD / stationaryStateCovMD) instead.
+    arguments
+        obj (1, 1) RealTimeCOIN
+        q double {mustBeScalarOrEmpty, mustBeInteger, mustBeFinite, mustBeNonnegative} = []
+    end
 
     N = obj.state_dim;
     Cmax = obj.max_contexts + 1;
@@ -59,5 +63,11 @@ function [W, M, Cov] = previewPredictiveFeedbackMD(obj, q)
             M(:, c, p) = sPred + obj.D.bias(:, c, p);
             Cov(:, :, c, p) = PPred + R;
         end
+    end
+end
+
+function mustBeScalarOrEmpty(x)
+    if ~isscalar(x) && ~isempty(x)
+        error('Input must be a scalar or empty.');
     end
 end

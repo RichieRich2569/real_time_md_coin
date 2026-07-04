@@ -15,6 +15,9 @@ function resampleStateMD(obj, idx)
         'global_transition_probabilities', 'global_cue_probabilities', 'bias_ss_2'};
     for i = 1:numel(matFields)
         f = matFields{i};
+        if ~isfield(obj.D, f)
+            continue;
+        end
         X = obj.D.(f);
         if isvector(X) && numel(X) == obj.num_particles
             obj.D.(f) = X(idx);
@@ -25,7 +28,7 @@ function resampleStateMD(obj, idx)
 
     % N x Cmax x P fields (means, bias, bias residual stats).
     threeFields = {'state_mean', 'state_filtered_mean', 'state_feedback_mean', ...
-        'bias', 'bias_ss_1'};
+        'bias', 'bias_ss_1', 'bias_info_ss'};
     for i = 1:numel(threeFields)
         f = threeFields{i};
         if isfield(obj.D, f)
@@ -36,7 +39,7 @@ function resampleStateMD(obj, idx)
     % 4-D fields: covariances (N x N x Cmax x P), Theta, and matrix
     % sufficient statistics carry the particle on the 4th dimension.
     fourFields = {'state_cov', 'state_filtered_cov', 'state_feedback_cov', ...
-        'Theta', 'Lambda_xx', 'Lambda_yx'};
+        'Theta', 'Lambda_xx', 'Lambda_yx', 'bias_precision_ss'};
     for i = 1:numel(fourFields)
         f = fourFields{i};
         if isfield(obj.D, f)

@@ -4,8 +4,17 @@ function observe_y(obj, y)
         obj (1, 1) RealTimeCOIN
         y (:, 1) double {mustBeNumeric} = []
     end
-    if isempty(y) || (isnumeric(y) && isscalar(y) && anynan(y))
-        % TODO: Having one dimension being NaN means inference has to be done with other non-nan values.
+    obs_mask = [];
+    if obj.state_dim > 1
+        if isempty(y)
+            y_val = [];
+            obs_mask = false(obj.state_dim, 1);
+        else
+            mustBeStateDim(obj.state_dim, y);
+            y_val = y(:);
+            obs_mask = ~isnan(y_val);
+        end
+    elseif isempty(y) || (isnumeric(y) && isscalar(y) && anynan(y))
         y_val = [];
     else
         mustBeStateDim(obj.state_dim, y);
@@ -21,11 +30,11 @@ function observe_y(obj, y)
         predictContext(obj, q_val);
         predictStatesMD(obj);
         predictStateFeedbackMD(obj);
-        resampleParticlesMD(obj, y_val, q_val);
+        resampleParticlesMD(obj, y_val, q_val, obs_mask);
         sampleContextMD(obj, q_val);
-        updateBeliefAboutStatesMD(obj, y_val);
-        sampleStatesMD(obj, y_val);
-        updateSufficientStatisticsMD(obj, y_val, q_val);
+        updateBeliefAboutStatesMD(obj, y_val, obs_mask);
+        sampleStatesMD(obj, y_val, obs_mask);
+        updateSufficientStatisticsMD(obj, y_val, q_val, obs_mask);
         sampleParametersMD(obj);
     else
         % Original scalar pipeline, unchanged.

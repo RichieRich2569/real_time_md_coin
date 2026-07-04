@@ -1,4 +1,8 @@
 function [W, M, V] = previewPredictiveFeedback(obj, q)
+    arguments
+        obj (1, 1) RealTimeCOIN
+        q double {mustBeScalarOrEmpty, mustBeInteger, mustBeFinite, mustBeNonnegative} = []
+    end
     Cmax = obj.max_contexts + 1;
     P = obj.num_particles;
     prior = zeros(Cmax, P);
@@ -29,4 +33,10 @@ function [W, M, V] = previewPredictiveFeedback(obj, q)
     end
     M = Mstate + obj.D.bias;
     V = Vstate + obj.observationVariance();
+end
+
+function mustBeScalarOrEmpty(x)
+    if ~isscalar(x) && ~isempty(x)
+        error('Input must be a scalar or empty.');
+    end
 end

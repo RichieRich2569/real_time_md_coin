@@ -1,4 +1,4 @@
-function updateBeliefAboutStatesMD(obj, y)
+function updateBeliefAboutStatesMD(obj, y, obsMask)
 % =========================================================================
 % MATHEMATICAL NOTE: MULTIVARIATE KALMAN MEASUREMENT UPDATE
 % =========================================================================
@@ -18,29 +18,39 @@ function updateBeliefAboutStatesMD(obj, y)
 
     N = obj.state_dim;
     P = obj.num_particles;
+    if nargin < 3 || isempty(obsMask)
+        obsMask = ~isnan(y(:));
+    else
+        obsMask = obsMask(:);
+    end
 
     % Inactive contexts: posterior == prior prediction.
     obj.D.state_filtered_mean = obj.D.state_mean;
     obj.D.state_filtered_cov = obj.D.state_cov;
-    if isempty(y)
+    if isempty(y) || ~any(obsMask)
         return;
     end
 
     R = obj.observationNoiseCov();
     yv = y(:);
     I = eye(N);
+    obsIdx = find(obsMask);
+    R_obs = R(obsIdx, obsIdx);
     for p = 1:P
         c = obj.D.context(p);
         Pp = obj.D.state_cov(:, :, c, p);
         sp = obj.D.state_mean(:, c, p);
-        yhat = obj.D.state_feedback_mean(:, c, p);   % s_pred + b
-        S = Pp + R;
+        yhat = obj.D.state_feedback_mean(obsIdx, c, p);   % s_pred + b
+        S = Pp(obsIdx, obsIdx) + R_obs;
 
         % K = Pp * inv(S) computed via a right solve for stability.
-        K = Pp / S;
-        innovation = yv - yhat;
+        K = Pp(:, obsIdx) / S;
+        innovation = yv(obsIdx) - yhat;
         sf = sp + K * innovation;
-        Pf = (I - K) * Pp;
+        KH = zeros(N, N);
+        KH(:, obsIdx) = K;
+        IKH = I - KH;
+        Pf = IKH * Pp * IKH' + K * R_obs * K';
         Pf = (Pf + Pf') ./ 2;     % enforce symmetry against round-off
 
         obj.D.state_filtered_mean(:, c, p) = sf;

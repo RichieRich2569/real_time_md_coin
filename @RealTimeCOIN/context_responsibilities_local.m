@@ -3,6 +3,5 @@ function p = context_responsibilities_local(obj)
 %
 %   Returns a row vector in the modal particles' local label frame. This is
 %   intended for live plots/logging and deliberately avoids global relabelling.
-
     p = obj.localContextProbabilityVector("responsibilities");
 end

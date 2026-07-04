@@ -9,8 +9,13 @@ function p = predictive_state_feedback_cdf(obj, y, q)
 %   integral-transform used for calibration. Each marginal of the predictive
 %   Gaussian mixture is itself a 1-D Gaussian mixture, so this reuses the
 %   scalar normal_cdf and reduces exactly to the scalar result at N == 1.
+    arguments
+        obj (1, 1) RealTimeCOIN
+        y (:, 1) double {mustBeFinite, mustBeReal}
+        q double {mustBeScalarOrEmpty, mustBeInteger, mustBeFinite, mustBeNonnegative} = []
+    end
 
-    if nargin < 3
+    if isempty(q)
         q = obj.pending_q;
     end
     qLabel = peekCueLabel(obj, q);
@@ -38,4 +43,11 @@ function p = predictive_state_feedback_cdf(obj, y, q)
         p(j) = sum(W .* obj.normal_cdf(y(j), Mj, Vj), 'all') ./ obj.num_particles;
     end
     p = min(max(p, 0), 1);
+end
+
+function mustBeScalarOrEmpty(x)
+    if ~(isempty(x) || isscalar(x))
+        error('RealTimeCOIN:InvalidCue', ...
+            'q must be empty or a scalar cue label.');
+    end
 end

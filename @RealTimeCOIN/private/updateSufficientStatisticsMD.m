@@ -1,4 +1,4 @@
-function updateSufficientStatisticsMD(obj, y, q)
+function updateSufficientStatisticsMD(obj, y, q, obsMask)
 %UPDATESUFFICIENTSTATISTICSMD Accumulate sufficient statistics (MD model).
 %
 %   Multi-dimensional counterpart of updateSufficientStatistics.m. The
@@ -19,6 +19,12 @@ function updateSufficientStatisticsMD(obj, y, q)
     N = obj.state_dim;
     Cmax = obj.max_contexts + 1;
     P = obj.num_particles;
+    if nargin < 4 || isempty(obsMask)
+        obsMask = ~isnan(y(:));
+    else
+        obsMask = obsMask(:);
+    end
+    hasObservation = ~isempty(y) && any(obsMask);
 
     % --- Context-transition and cue counts (identical to scalar model) ---
     idx = sub2ind([Cmax, Cmax, P], obj.D.previous_context, obj.D.context, 1:P);
@@ -50,12 +56,20 @@ function updateSufficientStatisticsMD(obj, y, q)
     end
 
     % --- Bias sufficient statistics ---
-    if obj.infer_bias && ~isempty(y)
+    if obj.infer_bias && hasObservation
         yv = y(:);
+        obsIdx = find(obsMask);
+        R = obj.observationNoiseCov();
+        Ri_obs = obj.safeInverse(R(obsIdx, obsIdx));
+        precisionUpdate = zeros(N, N);
+        precisionUpdate(obsIdx, obsIdx) = Ri_obs;
         for p = 1:P
             c = obj.D.context(p);
-            obj.D.bias_ss_1(:, c, p) = obj.D.bias_ss_1(:, c, p) + (yv - obj.D.x_bias(:, p));
-            obj.D.bias_ss_2(c, p) = obj.D.bias_ss_2(c, p) + 1;
+            infoUpdate = zeros(N, 1);
+            infoUpdate(obsIdx) = Ri_obs * (yv(obsIdx) - obj.D.x_bias(obsIdx, p));
+            obj.D.bias_info_ss(:, c, p) = obj.D.bias_info_ss(:, c, p) + infoUpdate;
+            obj.D.bias_precision_ss(:, :, c, p) = ...
+                obj.D.bias_precision_ss(:, :, c, p) + precisionUpdate;
         end
     end
 end

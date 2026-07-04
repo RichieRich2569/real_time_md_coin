@@ -6,8 +6,12 @@ rng(3);
 coin = RealTimeCOIN('num_particles', 20, 'max_contexts', 3, 'infer_bias', true);
 
 % Feed some observations
-coin.observe_q(1);
+coin.observe_q(10);
 coin.observe_y(0.3);
+coin.observe_q(20);
+coin.observe_y(0.1);
+before = coin.diagnostics();
+countMassBefore = sum(before.raw.n_context(:));
 
 % Save with setStationary = true
 tmpfile = [tempname, '.mat'];
@@ -18,9 +22,14 @@ coin2 = RealTimeCOIN('num_particles', 1); % dummy initialisation
 coin2.loadModel(tmpfile);
 
 assert(coin2.Trial == 0, 'Trial count should reset to zero after stationary save');
-probs = coin2.context_responsibilities();
-keys = probs.keys;
-assert(numel(keys) == 1 && keys{1} == 1, 'After reset only context 1 should be present');
+after = coin2.diagnostics();
+assert(sum(after.raw.n_context(:)) == countMassBefore, ...
+    'Stationary save should preserve learned transition counts');
+assert(size(after.raw.n_cue, 2) == size(before.raw.n_cue, 2), ...
+    'Stationary save should preserve learned cue columns');
+savedFile = load(tmpfile);
+assert(isequal(savedFile.model.cue_values, [10 20]), ...
+    'Stationary save should preserve raw cue-value mapping');
 
 % Save without reset
 coin.observe_q(1);
