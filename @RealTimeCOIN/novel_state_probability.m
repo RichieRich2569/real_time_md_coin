@@ -20,36 +20,33 @@ function densities = novel_state_probability(obj, values)
     end
 
     P = obj.num_particles;
-    used = 0;
 
     if obj.state_dim == 1
-        values = values(:)';
-        densities = zeros(size(values));
+        used = 0;
+        W = zeros(1, P);
+        M = zeros(1, P);
+        V = zeros(1, P);
         for p = 1:P
             if obj.D.C(p) >= obj.max_contexts
                 continue;                      % no novel slot left in this particle
             end
             novel = obj.D.C(p) + 1;
-            m = stationaryStateMean(obj, obj.D.retention(novel, p), obj.D.drift(novel, p));
-            v = stationaryStateVar(obj, obj.D.retention(novel, p));
-            densities = densities + obj.normal_pdf(values, m, v);
             used = used + 1;
+            W(used) = 1;
+            M(used) = stationaryStateMean(obj, obj.D.retention(novel, p), obj.D.drift(novel, p));
+            V(used) = stationaryStateVar(obj, obj.D.retention(novel, p));
         end
-        if used > 0
-            densities = densities ./ used;
-        end
+        densities = mixtureDensityOnGrid(obj, values, W(1:used), M(1:used), V(1:used), ...
+            used, "novel_state_probability");
         return;
     end
 
     N = obj.state_dim;
-    if size(values, 1) ~= N
-        error('RealTimeCOIN:GridDimensionMismatch', ...
-            ['novel_state_probability expects an %d-by-K grid (each column a ', ...
-             'query point) for state_dim == %d; received a %d-by-%d array.'], ...
-            N, N, size(values, 1), size(values, 2));
-    end
     Q = processNoiseCov(obj);
-    densities = zeros(1, size(values, 2));
+    used = 0;
+    W = zeros(1, P);
+    M = zeros(N, 1, P);
+    V = zeros(N, N, 1, P);
     for p = 1:P
         if obj.D.C(p) >= obj.max_contexts
             continue;                          % no novel slot left in this particle
@@ -57,12 +54,11 @@ function densities = novel_state_probability(obj, values)
         novel = obj.D.C(p) + 1;
         A = obj.D.Theta(:, 1:N, novel, p);
         d = obj.D.Theta(:, N+1, novel, p);
-        m = stationaryStateMeanMD(obj, A, d);
-        V = stationaryStateCovMD(obj, A, Q);
-        densities = densities + gaussianPdfColumnsMD(obj, values, m, V);
         used = used + 1;
+        W(used) = 1;
+        M(:, 1, used) = stationaryStateMeanMD(obj, A, d);
+        V(:, :, 1, used) = stationaryStateCovMD(obj, A, Q);
     end
-    if used > 0
-        densities = densities ./ used;
-    end
+    densities = mixtureDensityOnGrid(obj, values, W(1:used), M(:, 1, 1:used), ...
+        V(:, :, 1, 1:used), used, "novel_state_probability");
 end

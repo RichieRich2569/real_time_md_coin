@@ -20,12 +20,13 @@ function densities = novel_state_feedback_probability(obj, values)
     end
 
     P = obj.num_particles;
-    used = 0;
 
     if obj.state_dim == 1
-        values = values(:)';
         R = obj.sigma_sensory_noise^2;
-        densities = zeros(size(values));
+        used = 0;
+        W = zeros(1, P);
+        M = zeros(1, P);
+        V = zeros(1, P);
         for p = 1:P
             if obj.D.C(p) >= obj.max_contexts
                 continue;                      % no novel slot left in this particle
@@ -33,25 +34,22 @@ function densities = novel_state_feedback_probability(obj, values)
             novel = obj.D.C(p) + 1;
             m = stationaryStateMean(obj, obj.D.retention(novel, p), obj.D.drift(novel, p));
             v = stationaryStateVar(obj, obj.D.retention(novel, p));
-            densities = densities + obj.normal_pdf(values, m + obj.D.bias(novel, p), v + R);
             used = used + 1;
+            W(used) = 1;
+            [M(used), V(used)] = feedbackTransform(m, v, obj.D.bias(novel, p), R);
         end
-        if used > 0
-            densities = densities ./ used;
-        end
+        densities = mixtureDensityOnGrid(obj, values, W(1:used), M(1:used), V(1:used), ...
+            used, "novel_state_feedback_probability");
         return;
     end
 
     N = obj.state_dim;
-    if size(values, 1) ~= N
-        error('RealTimeCOIN:GridDimensionMismatch', ...
-            ['novel_state_feedback_probability expects an %d-by-K grid (each ', ...
-             'column a query point) for state_dim == %d; received a %d-by-%d array.'], ...
-            N, N, size(values, 1), size(values, 2));
-    end
     Q = processNoiseCov(obj);
     R = observationNoiseCov(obj);
-    densities = zeros(1, size(values, 2));
+    used = 0;
+    W = zeros(1, P);
+    M = zeros(N, 1, P);
+    V = zeros(N, N, 1, P);
     for p = 1:P
         if obj.D.C(p) >= obj.max_contexts
             continue;                          % no novel slot left in this particle
@@ -59,12 +57,12 @@ function densities = novel_state_feedback_probability(obj, values)
         novel = obj.D.C(p) + 1;
         A = obj.D.Theta(:, 1:N, novel, p);
         d = obj.D.Theta(:, N+1, novel, p);
-        m = stationaryStateMeanMD(obj, A, d) + obj.D.bias(:, novel, p);
-        V = stationaryStateCovMD(obj, A, Q) + R;
-        densities = densities + gaussianPdfColumnsMD(obj, values, m, V);
+        m = stationaryStateMeanMD(obj, A, d);
+        Vc = stationaryStateCovMD(obj, A, Q);
         used = used + 1;
+        W(used) = 1;
+        [M(:, 1, used), V(:, :, 1, used)] = feedbackTransform(m, Vc, obj.D.bias(:, novel, p), R);
     end
-    if used > 0
-        densities = densities ./ used;
-    end
+    densities = mixtureDensityOnGrid(obj, values, W(1:used), M(:, 1, 1:used), ...
+        V(:, :, 1, 1:used), used, "novel_state_feedback_probability");
 end

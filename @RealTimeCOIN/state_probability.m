@@ -14,62 +14,13 @@ function densities = state_probability(obj, values)
     end
 
     if obj.state_dim == 1
-        values = values(:)';
-        densities = singleStateDensity(obj, values, ...
-            obj.D.responsibilities, obj.D.state_filtered_mean, obj.D.state_filtered_var);
+        densities = mixtureDensityOnGrid(obj, values, obj.D.responsibilities, ...
+            obj.D.state_filtered_mean, obj.D.state_filtered_var, ...
+            obj.num_particles, "state_probability");
         return;
     end
 
-    densities = multiStateDensity(obj, values, ...
-        obj.D.responsibilities, obj.D.state_filtered_mean, obj.D.state_filtered_cov);
-end
-
-function densities = singleStateDensity(obj, values, W, M, V)
-%SINGLESTATEDENSITY Gaussian-mixture density at K query points (scalar model).
-        arguments
-            obj (1, 1) RealTimeCOIN
-            values (1, :) double {mustBeFinite, mustBeReal}
-            W (:, :) double {mustBeFinite, mustBeNonnegative, mustMarginalize(obj, W)}
-            M (:, :) double {mustBeFinite, mustBeReal}
-            V (:, :) double {mustBeFinite, mustBeNonnegative}
-        end
-        densities = zeros(size(values));
-        for p = 1:obj.num_particles
-            for c = 1:(obj.max_contexts+1)
-                if W(c,p) > 0
-                    densities = densities + W(c,p) .* obj.normal_pdf(values, M(c,p), V(c,p));
-                end
-            end
-        end
-        densities = densities ./ obj.num_particles;
-end
-
-function densities = multiStateDensity(obj, values, W, M, V)
-%MULTISTATEDENSITY Gaussian-mixture density at N-by-K query points (MD model).
-    arguments
-        obj (1, 1) RealTimeCOIN
-        values (:, :) double {mustBeFinite, mustBeReal}
-        W (:, :) double {mustBeFinite, mustBeNonnegative, mustMarginalize(obj, W)}
-        M (:, :, :) double {mustBeFinite, mustBeReal}
-        V (:, :, :, :) double {mustBeFinite, mustBeCovarianceMatrix}
-    end
-    N = obj.state_dim;
-    if size(values, 1) ~= N
-        error('RealTimeCOIN:GridDimensionMismatch', ...
-            ['state_probability expects an %d-by-K grid (each column a query ', ...
-             'point) for state_dim == %d; received a %d-by-%d array.'], ...
-            N, N, size(values, 1), size(values, 2));
-    end
-    K = size(values, 2);
-    densities = zeros(1, K);
-    Cmax = obj.max_contexts + 1;
-    for p = 1:obj.num_particles
-        for c = 1:Cmax
-            if W(c,p) > 0
-                densities = densities + W(c,p) .* ...
-                    obj.gaussianPdfColumnsMD(values, M(:,c,p), V(:,:,c,p));
-            end
-        end
-    end
-    densities = densities ./ obj.num_particles;
+    densities = mixtureDensityOnGrid(obj, values, obj.D.responsibilities, ...
+        obj.D.state_filtered_mean, obj.D.state_filtered_cov, ...
+        obj.num_particles, "state_probability");
 end
