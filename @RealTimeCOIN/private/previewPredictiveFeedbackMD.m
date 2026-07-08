@@ -29,11 +29,7 @@ function [W, M, Cov] = previewPredictiveFeedbackMD(obj, q)
     R = obj.observationNoiseCov();
 
     % --- Context mixture weights: transition prior, optionally x cue likelihood ---
-    prior = zeros(Cmax, P);
-    for p = 1:P
-        prior(:, p) = obj.D.local_transition_matrix(obj.D.context(p), :, p)';
-    end
-    prior = obj.normalizeColumns(prior);
+    prior = obj.currentTransitionPrior();
     if isempty(q)
         W = prior;
     else
