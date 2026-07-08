@@ -7,16 +7,96 @@ function results = validate_context_recovery(varargin)
 %   finding the label permutation that minimizes mismatch with the true
 %   labels.  This separates genuine inference failure from harmless label
 %   switching.
+%
+%   Seed averaging.  The recovery accuracy sits close to its 0.65 gate, so a
+%   single-seed run is seed-sensitive: the same code can pass or fail purely
+%   from which particle-filter noise draw it happened to use.  To remove that
+%   flip we run the experiment over a small set of seeds derived from the
+%   'Seed' parameter (Seed + (0:NumSeeds-1)), compute the recovery metrics on
+%   each, and gate on the ACROSS-SEED AVERAGE of accuracy, true-context
+%   posterior mass, and mean recovery lag.  The thresholds, the printed
+%   summary line, and the results struct shape are unchanged; the top-level
+%   metric fields now hold the seed-averaged values, per-seed detail is
+%   exposed under results.per_seed, and the trace fields (cues/feedback/
+%   inferred/matched contexts) come from the first (representative) seed.
 
 ip = inputParser;
 addParameter(ip, 'Trials', 120);
 addParameter(ip, 'Particles', 150);
 addParameter(ip, 'Seed', 1401);
+addParameter(ip, 'NumSeeds', 5);
 addParameter(ip, 'Strict', false);
 parse(ip, varargin{:});
 cfg = ip.Results;
 
-rng(cfg.Seed);
+seeds = cfg.Seed + (0:cfg.NumSeeds - 1);
+
+% Run each seed independently and collect the per-seed metric structs.
+% Seed the array from the first run so every element shares the same fields.
+perSeed = run_one_seed(seeds(1), cfg);
+for i = 2:numel(seeds)
+    perSeed(i) = run_one_seed(seeds(i), cfg);
+end
+
+% Across-seed averages: these are what the gates act on.
+avgAccuracy = mean([perSeed.accuracy]);
+avgPosterior = mean([perSeed.mean_posterior_true_context]);
+avgInferredCount = mean([perSeed.mean_inferred_context_count]);
+
+lagMatrix = vertcat(perSeed.recovery_lags);          % numSeeds x numSwitches
+avgLags = mean(lagMatrix, 1, 'omitnan');
+avgMeanLag = mean([perSeed.mean_recovery_lag], 'omitnan');
+
+% Gate rationale: these are qualitative recovery gates, not calibration
+% gates, so they are intentionally generous.  context_accuracy (0.65) is the
+% best-relabelled hard-assignment agreement; posterior_true_context (0.45)
+% is the softer average posterior mass on the true context; and
+% mean_recovery_lag (<=20 trials) bounds how quickly the filter re-locks
+% after a context switch.  Averaging over NumSeeds seeds (see header) removes
+% the cross-seed flips that used to occur right at the accuracy boundary.
+thresholds = struct();
+thresholds.context_accuracy = 0.65;
+thresholds.posterior_true_context = 0.45;
+thresholds.mean_recovery_lag = 20;
+
+checks = struct();
+checks.context_accuracy = avgAccuracy > thresholds.context_accuracy;
+checks.posterior_true_context = avgPosterior > thresholds.posterior_true_context;
+checks.mean_recovery_lag = avgMeanLag <= thresholds.mean_recovery_lag;
+[passed, checks] = validation_pass_summary(checks);
+
+rep = perSeed(1);   % representative seed for trace/diagnostic fields
+
+results = struct();
+results.context_accuracy = avgAccuracy;
+results.mean_posterior_true_context = avgPosterior;
+results.recovery_lags = avgLags;
+results.mean_recovery_lag = avgMeanLag;
+results.mean_inferred_context_count = avgInferredCount;
+results.true_context = rep.true_context;
+results.inferred_context = rep.inferred_context;
+results.matched_context = rep.matched_context;
+results.posterior_true_context = rep.posterior_true_context;
+results.feedback = rep.feedback;
+results.cues = rep.cues;
+results.thresholds = thresholds;
+results.checks = checks;
+results.passed = passed;
+results.per_seed = perSeed;
+results.seeds = seeds;
+results.config = cfg;
+
+fprintf('Context recovery: accuracy %.3f, true-context posterior %.3f, mean lag %.1f trials\n', ...
+    avgAccuracy, avgPosterior, avgMeanLag);
+
+if cfg.Strict && ~passed
+    error('validate_context_recovery:Failed', 'Context recovery validation failed.');
+end
+end
+
+function out = run_one_seed(seed, cfg)
+%RUN_ONE_SEED Execute one context-recovery experiment at a fixed seed.
+rng(seed);
 
 trueContext = synthetic_context_sequence(cfg.Trials);
 a = [0.92 0.90];
@@ -68,47 +148,19 @@ end
 switches = find(diff(trueContext) ~= 0) + 1;
 lags = recovery_lags(mapped, trueContext, switches);
 
-% Gate rationale: these are qualitative recovery gates, not calibration
-% gates, so they are intentionally generous.  context_accuracy (0.65) is the
-% best-relabelled hard-assignment agreement; posterior_true_context (0.45)
-% is the softer average posterior mass on the true context; and
-% mean_recovery_lag (<=20 trials) bounds how quickly the filter re-locks
-% after a context switch.  These can be seed-sensitive near the boundary;
-% widen the margin or average over a seed loop for publication runs.
-thresholds = struct();
-thresholds.context_accuracy = 0.65;
-thresholds.posterior_true_context = 0.45;
-thresholds.mean_recovery_lag = 20;
-
-checks = struct();
-checks.context_accuracy = accuracy > thresholds.context_accuracy;
-checks.posterior_true_context = mean(posteriorTrue) > thresholds.posterior_true_context;
-checks.mean_recovery_lag = mean(lags, 'omitnan') <= thresholds.mean_recovery_lag;
-[passed, checks] = validation_pass_summary(checks);
-
-results = struct();
-results.context_accuracy = accuracy;
-results.mean_posterior_true_context = mean(posteriorTrue);
-results.recovery_lags = lags;
-results.mean_recovery_lag = mean(lags, 'omitnan');
-results.mean_inferred_context_count = mean(inferredCount);
-results.true_context = trueContext;
-results.inferred_context = inferred;
-results.matched_context = mapped;
-results.posterior_true_context = posteriorTrue;
-results.feedback = y;
-results.cues = q;
-results.thresholds = thresholds;
-results.checks = checks;
-results.passed = passed;
-results.config = cfg;
-
-fprintf('Context recovery: accuracy %.3f, true-context posterior %.3f, mean lag %.1f trials\n', ...
-    accuracy, results.mean_posterior_true_context, results.mean_recovery_lag);
-
-if cfg.Strict && ~passed
-    error('validate_context_recovery:Failed', 'Context recovery validation failed.');
-end
+out = struct();
+out.seed = seed;
+out.accuracy = accuracy;
+out.mean_posterior_true_context = mean(posteriorTrue);
+out.recovery_lags = lags;
+out.mean_recovery_lag = mean(lags, 'omitnan');
+out.mean_inferred_context_count = mean(inferredCount);
+out.true_context = trueContext;
+out.inferred_context = inferred;
+out.matched_context = mapped;
+out.posterior_true_context = posteriorTrue;
+out.feedback = y;
+out.cues = q;
 end
 
 function c = synthetic_context_sequence(T)
