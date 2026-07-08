@@ -13,8 +13,10 @@ coin.observe_y(0.1);
 before = coin.diagnostics();
 countMassBefore = sum(before.raw.n_context(:));
 
-% Save with setStationary = true
+% Save with setStationary = true. Guard the temp file so it is removed even if
+% a later assertion fails.
 tmpfile = [tempname, '.mat'];
+cleanup = onCleanup(@() testutil.deleteTempFile(tmpfile)); %#ok<NASGU>
 coin.saveModel(tmpfile, true);
 
 % Load into a new object

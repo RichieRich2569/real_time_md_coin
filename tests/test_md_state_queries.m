@@ -43,7 +43,7 @@ end
 % --- state_probability: non-negative, integrates to ~1 -------------------
 [muS, vS] = coin.state_moments();
 densState = @(X) coin.state_probability(X);
-[intState, valsState] = integrate2d(densState, muS, sqrt(diag(vS)));
+[intState, valsState] = testutil.integrate2d(densState, muS, sqrt(diag(vS)));
 assert(all(valsState >= 0), 'state_probability returned a negative density');
 assert(abs(intState - 1) < 0.05, ...
     sprintf('state_probability does not integrate to 1 (got %.4f)', intState));
@@ -56,7 +56,7 @@ assert(isequal(size(dRow), [1, 3]), 'state_probability output is not 1-by-K');
 % --- state_feedback_probability: non-negative, integrates to ~1 ----------
 [muF, SigmaF] = coin.predictive_feedback_moments(1);
 densFb = @(X) coin.state_feedback_probability(X);
-[intFb, valsFb] = integrate2d(densFb, muF, sqrt(diag(SigmaF)));
+[intFb, valsFb] = testutil.integrate2d(densFb, muF, sqrt(diag(SigmaF)));
 assert(all(valsFb >= 0), 'state_feedback_probability returned a negative density');
 assert(abs(intFb - 1) < 0.05, ...
     sprintf('state_feedback_probability does not integrate to 1 (got %.4f)', intFb));
@@ -74,7 +74,7 @@ for i = 1:numel(ks)
 end
 % Integrate one context's density to ~1.
 ctxFun = @(X) mapValue(coin.state_given_context_probability(X), ks{1});
-[intCtx, ~] = integrate2d(ctxFun, muS, sqrt(diag(vS)));
+[intCtx, ~] = testutil.integrate2d(ctxFun, muS, sqrt(diag(vS)));
 assert(abs(intCtx - 1) < 0.08, ...
     sprintf('per-context density does not integrate to 1 (got %.4f)', intCtx));
 
@@ -115,22 +115,6 @@ assert(scal.predictive_state_feedback_cdf(-5, 1) < pc + 1e-12 && ...
 
 fprintf('test_md_state_queries passed (state integral %.3f, feedback integral %.3f).\n', ...
     intState, intFb);
-end
-
-% ---------------------------------------------------------------------------
-function [integral, vals] = integrate2d(densFun, center, halfStd)
-%INTEGRATE2D Tensor-product trapezoidal integral of a 2-D density.
-%   densFun maps an N-by-K matrix of column points to a 1-by-K density row.
-%   The grid spans center +/- 6*halfStd on each axis.
-n = 121;
-span = 6;
-ax1 = linspace(center(1) - span*halfStd(1), center(1) + span*halfStd(1), n);
-ax2 = linspace(center(2) - span*halfStd(2), center(2) + span*halfStd(2), n);
-[G1, G2] = meshgrid(ax1, ax2);
-pts = [G1(:)'; G2(:)'];
-vals = densFun(pts);
-Z = reshape(vals, size(G1));
-integral = trapz(ax2, trapz(ax1, Z, 2));
 end
 
 % ---------------------------------------------------------------------------

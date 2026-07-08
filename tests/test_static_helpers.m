@@ -1,5 +1,5 @@
-function test_helpers
-%TEST_HELPERS Unit tests for public static helper methods.
+function test_static_helpers
+%TEST_STATIC_HELPERS Unit tests for public static helper methods.
 
 rng(4);
 
