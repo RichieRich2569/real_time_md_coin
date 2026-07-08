@@ -12,13 +12,9 @@ function w = global_cue_probabilities(obj)
         obj (1, 1) RealTimeCOIN
     end
     if isempty(obj.cue_values)
-        error('RealTimeCOIN:NoCues', ...
-            'global_cue_probabilities requires the model to have observed sensory cues.');
+        error("RealTimeCOIN:NoCues", ...
+            "global_cue_probabilities requires the model to have observed sensory cues.");
     end
     w = mean(obj.D.global_cue_probabilities, 2)';
-    w(~isfinite(w)) = 0;
-    s = sum(w);
-    if s > 0
-        w = w ./ s;
-    end
+    w = renormalizeGlobalWeights(w);
 end
