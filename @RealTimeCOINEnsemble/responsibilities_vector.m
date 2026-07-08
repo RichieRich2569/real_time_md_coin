@@ -1,13 +1,14 @@
 function p = responsibilities_vector(obj)
 %RESPONSIBILITIES_VECTOR Cross-run averaged posterior context probabilities.
+%   p = responsibilities_vector(obj) returns the 1-by-(max_contexts+1) posterior
+%   context probability row, averaged across runs in the common reference frame
+%   (docs/SPEC_ensemble.md Part 10). Real contexts occupy slots 1..Kref, the
+%   novel-context probability sits in slot Kref+1, and the row sums to 1
+%   (zero-fill averaging conserves probability). Read-only.
 %
-%   *** PHASE 2 STUB: returns a NaN placeholder of the correct shape. ***
-%   The real implementation aligns each member's contexts onto a common
-%   reference frame (docs/SPEC_ensemble.md Part 10) and zero-fill-averages the
-%   per-run responsibility vectors so the result sums to 1. Author tests against
-%   the spec, not this stub.
+%   See also PREDICTED_CONTEXT_PROBABILITIES_VECTOR, SAMPLED_CONTEXT_COUNT.
     arguments
         obj (1, 1) RealTimeCOINEnsemble
     end
-    p = nan(1, obj.members{1}.max_contexts + 1);
+    p = ensembleContextVector(obj, @(m) m.responsibilities_vector());
 end

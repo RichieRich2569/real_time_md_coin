@@ -161,10 +161,12 @@ classdef RealTimeCOIN < handle
 
         function p = stationary_distribution(T)
             c = size(T,1);
-            A = T' - eye(c);
-            b = zeros(c,1);
-            A(end+1,:) = 1;
-            b(end+1) = 1;
+            % Append the normalisation row (sum of probabilities = 1). Build A and
+            % b by concatenation rather than index-growth: for c == 1 the scalar
+            % b = zeros(1,1) would grow into a ROW under b(end+1)=1 while A grows
+            % into a column, making A\b fail. Concatenation keeps both columns.
+            A = [T' - eye(c); ones(1, c)];
+            b = [zeros(c, 1); 1];
             x = A \ b;
             x(x < 0) = 0;
             if sum(x) == 0

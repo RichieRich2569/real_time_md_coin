@@ -339,8 +339,11 @@ untouched) still holds.
 ### 10.5 Testable guarantees (Phase 2)
 These hold **without** re-implementing the aligner and are the recommended oracles:
 1. **`runs == 1` reduction:** every Phase-2 query equals its single member's query
-   exactly (`Kref = K_1`, identity matching; density Map keys and values identical;
-   vectors identical including novel-slot placement).
+   (`Kref = K_1`, identity matching; density Map keys and values identical; vectors
+   identical including novel-slot placement). This is **bit-exact for the scalar
+   model**; for the MD model it holds **to within a few eps**, because the vector
+   average consolidates each member's tiny (~1e-16) residual mass in unused slots
+   into the novel slot to keep the sum exactly 1 — use a small tolerance for MD.
 2. **Probability conservation:** `responsibilities_vector`,
    `predicted_context_probabilities_vector`, `sampled_context_count`, and
    `stationary_context_probabilities` each sum to 1 (within a few eps) whenever the
