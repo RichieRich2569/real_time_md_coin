@@ -27,7 +27,7 @@ function densities = state_feedback_probability(obj, values)
 end
 
 function densities = singleFeedbackDensity(obj, values, W, M, V)
-%SINGLEFEEDBACKDENSITY Gaussian-mixture density at K query points (scalar model
+%SINGLEFEEDBACKDENSITY Gaussian-mixture density at K query points (scalar model).
     arguments
         obj (1, 1) RealTimeCOIN
         values (1, :) double {mustBeFinite, mustBeReal}
@@ -48,7 +48,6 @@ end
 
 function densities = multiFeedbackDensity(obj, values, W, M, V)
 %MULTIFEEDBACKDENSITY Gaussian-mixture density at N-by-K query points (MD model).
-    
     arguments
         obj (1, 1) RealTimeCOIN
         values (:, :) double {mustBeFinite, mustBeReal}
@@ -76,59 +75,4 @@ function densities = multiFeedbackDensity(obj, values, W, M, V)
         end
     end
     densities = densities ./ obj.num_particles;
-end
-
-function mustMarginalize = mustMarginalize(obj, prob)
-    % Checks if a vector of [C,P] probabilities are marginalized over C.
-    arguments
-        obj (1, 1) RealTimeCOIN
-        prob (:, :) double {mustBeFinite, mustBeNonnegative}
-    end
-    mustMarginalize = true;
-    if size(prob, 1) == obj.max_contexts + 1
-        if any(abs(sum(prob, 1) - 1) > 1e-6)
-            mustMarginalize = false;
-        end
-    end
-end
-
-function mustBeCovarianceMatrix(V)
-    % Fast page-wise covariance screen for V(:,:,c,p).
-    if ~isreal(V)
-        error('RealTimeCOIN:InvalidCovarianceMatrix', ...
-            'Covariance matrices must be real.');
-    end
-
-    N = size(V, 1);
-    if size(V, 2) ~= N
-        error('RealTimeCOIN:InvalidCovarianceMatrix', ...
-            'Each covariance matrix must be square; received %d-by-%d pages.', ...
-            size(V, 1), size(V, 2));
-    end
-
-    if isempty(V)
-        return;
-    end
-
-    tol = 1e-10 * max(1, max(abs(V), [], 'all'));
-    if any(abs(V - permute(V, [2 1 3 4])) > tol, 'all')
-        error('RealTimeCOIN:InvalidCovarianceMatrix', ...
-            'Each covariance matrix must be symmetric.');
-    end
-
-    pages = reshape(V, N * N, []);
-    variances = pages(1:(N + 1):end, :);
-    if any(variances < -tol, 'all')
-        error('RealTimeCOIN:InvalidCovarianceMatrix', ...
-            'Covariance matrix variances must be nonnegative.');
-    end
-
-    if N > 1
-        sigma = sqrt(max(variances, 0));
-        covLimit = reshape(sigma, N, 1, []) .* reshape(sigma, 1, N, []);
-        if any(abs(reshape(V, N, N, [])) - covLimit > tol, 'all')
-            error('RealTimeCOIN:InvalidCovarianceMatrix', ...
-                'Covariances must satisfy |cov(i,j)| <= sqrt(var(i)*var(j)).');
-        end
-    end
 end
