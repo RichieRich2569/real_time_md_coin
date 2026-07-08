@@ -1,20 +1,33 @@
 function updateBeliefAboutStatesMD(obj, y, obsMask)
-% =========================================================================
-% MATHEMATICAL NOTE: MULTIVARIATE KALMAN MEASUREMENT UPDATE
-% =========================================================================
-% With the identity observation model y = s + b + v, v ~ N(0, R), the
-% innovation and its covariance for the active context are
-%     y_tilde = y - (s_pred + b),   S = P_pred + R.
-% The Kalman gain, posterior mean and posterior covariance are
-%     K      = P_pred * S^-1
-%     s_post = s_pred + K * y_tilde
-%     P_post = (I - K) * P_pred
-% At N == 1 this is exactly the scalar update in updateBeliefAboutStates.m
-% (K = predVar/(predVar+obsVar)). Inactive contexts inherit the prediction
-% unchanged, since no measurement informs them on this trial.
-% =========================================================================
-%
 %UPDATEBELIEFABOUTSTATESMD Multivariate Kalman update for the active context.
+%   updateBeliefAboutStatesMD(obj, y, obsMask) is the multi-dimensional
+%   counterpart of updateBeliefAboutStates.m. With the identity observation
+%   model y = s + b + v, v ~ N(0, R), the innovation and its covariance for the
+%   active context are
+%
+%       y_tilde = y - (s_pred + b),   S = P_pred + R.
+%
+%   The Kalman gain, posterior mean and posterior covariance are
+%
+%       K      = P_pred * S^-1
+%       s_post = s_pred + K * y_tilde
+%       P_post = (I - K) * P_pred          (Joseph form used below)
+%
+%   At N == 1 this reduces exactly to the scalar update in
+%   updateBeliefAboutStates.m (K = predVar/(predVar+obsVar)). Inactive contexts
+%   inherit the prediction unchanged, since no measurement informs them on this
+%   trial.
+%
+%   Partial-observation asymmetry vs. the scalar path: MD feedback is a vector,
+%   so a trial may observe only some dimensions. obsMask (logical, N-by-1)
+%   selects the observed dimensions; when omitted it defaults to the non-NaN
+%   entries of y. Only that sub-block (obsIdx) enters the update, while the
+%   unobserved dimensions are still corrected through the cross-covariance in
+%   K. The scalar path has no such mask - with a single dimension the only
+%   "missing" case is an entirely empty/NaN y.
+%
+%   Writes obj.D.state_filtered_mean (N-by-Cmax-by-P) and
+%   obj.D.state_filtered_cov (N-by-N-by-Cmax-by-P).
 
     N = obj.state_dim;
     P = obj.num_particles;
