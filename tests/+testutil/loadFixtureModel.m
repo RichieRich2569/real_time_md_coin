@@ -28,7 +28,7 @@ model.alignment_seed = alignmentSeed;
 
 tmpfile = [tempname, '.mat'];
 save(tmpfile, 'model');
-cleanup = onCleanup(@() testutil.deleteTempFile(tmpfile)); %#ok<NASGU>
+cleanup = onCleanup(@() testutil.deleteTempFile(tmpfile));
 coin = RealTimeCOIN('num_particles', 1);
 coin.loadModel(tmpfile);
 end

@@ -16,7 +16,7 @@ countMassBefore = sum(before.raw.n_context(:));
 % Save with setStationary = true. Guard the temp file so it is removed even if
 % a later assertion fails.
 tmpfile = [tempname, '.mat'];
-cleanup = onCleanup(@() testutil.deleteTempFile(tmpfile)); %#ok<NASGU>
+cleanup = onCleanup(@() testutil.deleteTempFile(tmpfile));
 coin.saveModel(tmpfile, true);
 
 % Load into a new object

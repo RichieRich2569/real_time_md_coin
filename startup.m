@@ -27,7 +27,7 @@ npbayesDir = fullfile(rootDir, 'npbayes-r21');
 % folder as the current folder. Capture the caller's folder once and restore it
 % on any exit path (normal or error) with a single cleanup guard.
 originalDir = pwd;
-cleanupObj = onCleanup(@() cd(originalDir)); %#ok<NASGU> restores folder on exit
+cleanupObj = onCleanup(@() cd(originalDir)); % restores folder on exit
 
 if exist(lightspeedDir, 'dir')
     addpath(genpath(lightspeedDir));

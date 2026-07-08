@@ -11,7 +11,6 @@ function predictStateFeedbackMD(obj)
 %   S is reused both as the resampling likelihood covariance and as the
 %   denominator of the Kalman gain in updateBeliefAboutStatesMD.
 
-    N = obj.state_dim;
     Cmax = obj.max_contexts + 1;
     P = obj.num_particles;
     R = obj.observationNoiseCov();
