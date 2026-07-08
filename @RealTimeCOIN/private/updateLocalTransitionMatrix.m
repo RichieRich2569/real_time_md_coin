@@ -37,11 +37,8 @@ function updateLocalTransitionMatrix(obj)
         % Row-normalise each valid row to a proper transition distribution;
         % all-zero rows (invalid source contexts) are left as zeros.
         rowSums = sum(raw, 2);
-        for r = 1:Cmax
-            if rowSums(r) > 0
-                T(r,:,p) = raw(r,:) ./ rowSums(r);
-            end
-        end
+        nz = rowSums > 0;                 % valid source rows (all-zero rows stay 0)
+        T(nz,:,p) = raw(nz,:) ./ rowSums(nz);
     end
     obj.D.local_transition_matrix = T;
 end

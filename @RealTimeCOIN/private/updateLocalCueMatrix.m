@@ -32,11 +32,8 @@ function updateLocalCueMatrix(obj)
         raw(~valid,:) = 0;   % zero out non-existent context rows
         % Row-normalise each valid context row to a proper emission distribution.
         rowSums = sum(raw, 2);
-        for c = 1:Cmax
-            if rowSums(c) > 0
-                L(c,:,p) = raw(c,:) ./ rowSums(c);
-            end
-        end
+        nz = rowSums > 0;                 % valid context rows (all-zero rows stay 0)
+        L(nz,:,p) = raw(nz,:) ./ rowSums(nz);
     end
     obj.D.local_cue_matrix = L;
 end
