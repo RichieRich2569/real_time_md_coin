@@ -13,14 +13,13 @@ function [pmf, labels] = previewCuePmf(obj)
     Qn = size(obj.D.local_cue_matrix, 2);
     labels = 1:Qn;
     pmf = zeros(1, Qn);
+    prior = obj.currentTransitionPrior();
     for p = 1:P
-        prior = obj.D.local_transition_matrix(obj.D.context(p), :, p)';
-        prior = obj.normalizeColumns(prior);
         cueGivenContext = obj.D.local_cue_matrix(:,:,p);
         if size(cueGivenContext,1) < Cmax
             cueGivenContext(Cmax,Qn) = 0;
         end
-        pmf = pmf + (prior' * cueGivenContext);
+        pmf = pmf + (prior(:,p)' * cueGivenContext);
     end
     pmf = pmf ./ P;
     if sum(pmf) > 0
