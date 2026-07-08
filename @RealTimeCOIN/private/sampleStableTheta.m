@@ -13,8 +13,27 @@ function Theta = sampleStableTheta(obj, M, U, V)
 %   times; if no stable draw is found, force stability by spectral scaling,
 %   A <- A / (rho + margin), which shrinks every eigenvalue inside the unit
 %   disc while leaving the drift column d unchanged.
+%
+%   Inputs:
+%     M  N-by-(N+1) mean of the augmented dynamics [A | d].
+%     U  N-by-N among-row covariance.
+%     V  (N+1)-by-(N+1) among-column covariance.
+%
+%   Output:
+%     Theta  N-by-(N+1) stable augmented dynamics with spectral radius < 1.
+%
+%   See also sampleMatrixNormal, sampleBivariateTruncated.
 
     N = obj.state_dim;
+    if ~isnumeric(M) || ~isreal(M) || ~isequal(size(M), [N, N + 1])
+        error("RealTimeCOIN:sampleStableTheta:invalidMean", ...
+            "M must be a real %d-by-%d matrix ([A | d]).", N, N + 1);
+    end
+
+    % maxIter: number of rejection-sampling attempts before falling back to
+    % spectral scaling. margin: the safety gap kept below the unit circle when
+    % rescaling, A <- A / (rho + margin), so the projected spectral radius is
+    % rho / (rho + margin) < 1 strictly.
     maxIter = 10;
     margin = 0.01;
 

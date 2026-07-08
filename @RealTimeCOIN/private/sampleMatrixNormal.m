@@ -14,8 +14,31 @@ function X = sampleMatrixNormal(obj, M, U, V)
 %   We take L_U as the lower Cholesky factor of U and R_V as the upper
 %   Cholesky factor of V. choljitter is used for U so that a (near-)singular
 %   row covariance (e.g. zero process noise) degrades gracefully.
+%
+%   Inputs:
+%     M  n-by-p mean matrix.
+%     U  n-by-n among-row covariance.
+%     V  p-by-p among-column covariance.
+%
+%   Output:
+%     X  n-by-p matrix-normal sample.
+%
+%   See also sampleStableTheta, choljitter.
 
+    if ~isnumeric(M) || ~isreal(M) || ~ismatrix(M)
+        error("RealTimeCOIN:sampleMatrixNormal:invalidMean", ...
+            "M must be a real numeric matrix.");
+    end
     [n, p] = size(M);
+    if ~isnumeric(U) || ~isreal(U) || ~isequal(size(U), [n, n])
+        error("RealTimeCOIN:sampleMatrixNormal:invalidRowCov", ...
+            "U must be a real %d-by-%d matrix matching size(M, 1).", n, n);
+    end
+    if ~isnumeric(V) || ~isreal(V) || ~isequal(size(V), [p, p])
+        error("RealTimeCOIN:sampleMatrixNormal:invalidColCov", ...
+            "V must be a real %d-by-%d matrix matching size(M, 2).", p, p);
+    end
+
     Z = randn(n, p);
 
     [Lu, ~] = obj.choljitter(U);                 % Lu * Lu' = U  (lower)
@@ -34,6 +57,9 @@ function R = cholUpperPSD(V)
     if ~isfinite(scale) || scale <= 0
         scale = 1;
     end
+    % Escalating diagonal jitter: start one part in 1e12 of the matrix scale and
+    % multiply by 10 each attempt (up to 8 tries, i.e. up to ~1e-4 * scale)
+    % until chol succeeds. The 1e-12 base is negligible relative to V.
     jit = 1e-12 * scale;
     for k = 1:8
         [R, flag] = chol(V + jit * eye(size(V)));
