@@ -45,11 +45,15 @@ function sampleStatesMD(obj, y, obsMask)
         yv = y(:);
     end
 
+    % NOTE (perf, not addressed here): this double loop performs O(2*P*Cmax)
+    % N-by-N safeInverse calls (safeInverse(Ppred) plus the active-context
+    % posterior). Caching per-context factorisations could cut this; see the
+    % deferred-optimizations report.
     for p = 1:P
         active = obj.D.context(p);
         for c = 1:Cmax
-            A = obj.D.Theta(:, 1:N, c, p);
-            d = obj.D.Theta(:, N+1, c, p);
+            A = obj.D.Theta(:, 1:N, c, p);   % state-transition matrix (N x N)
+            d = obj.D.Theta(:, N+1, c, p);   % drift vector (N x 1)
 
             % --- 1. Smoother sample of the lag state s_{i-1} ---
             Ppred = obj.D.state_cov(:, :, c, p);
