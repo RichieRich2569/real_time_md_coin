@@ -20,16 +20,19 @@ function predictStatesMD(obj)
     obj.D.state_mean = zeros(N, Cmax, P);
     obj.D.state_cov = zeros(N, N, Cmax, P);
 
+    % Per-(particle, context) Kalman time update. Each cell uses its own
+    % dynamics Theta = [A | d], so the propagation is done one small N-by-N
+    % block at a time (see "Deferred optimizations" note for batching options).
     for p = 1:P
         for c = 1:Cmax
-            A = obj.D.Theta(:, 1:N, c, p);
-            d = obj.D.Theta(:, N+1, c, p);
+            A = obj.D.Theta(:, 1:N, c, p);            % retention matrix A
+            d = obj.D.Theta(:, N+1, c, p);            % drift vector d
             sf = obj.D.state_filtered_mean(:, c, p);
             Pf = obj.D.state_filtered_cov(:, :, c, p);
 
             obj.D.state_mean(:, c, p) = A * sf + d;
             Pp = A * Pf * A' + Q;
-            obj.D.state_cov(:, :, c, p) = (Pp + Pp') ./ 2;
+            obj.D.state_cov(:, :, c, p) = (Pp + Pp') ./ 2;   % symmetrise vs round-off
         end
 
         % Re-seed the novel context to its stationary distribution.

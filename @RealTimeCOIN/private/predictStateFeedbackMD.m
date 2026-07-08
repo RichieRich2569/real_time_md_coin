@@ -17,5 +17,8 @@ function predictStateFeedbackMD(obj)
     R = obj.observationNoiseCov();
 
     obj.D.state_feedback_mean = obj.D.state_mean + obj.D.bias;
+    % Add the common observation noise R to every context/particle innovation
+    % covariance. repmat broadcasts R across the Cmax*P slices (this materialises
+    % the full N-by-N-by-Cmax-by-P tensor - see "Deferred optimizations" note).
     obj.D.state_feedback_cov = obj.D.state_cov + repmat(R, 1, 1, Cmax, P);
 end
