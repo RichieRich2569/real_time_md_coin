@@ -23,11 +23,11 @@ coinNaN.observe_y([NaN; NaN]);
 dNaN = coinNaN.diagnostics();
 
 assert(coinNaN.Trial == 1, 'All-NaN trial did not advance the trial counter');
-assertClose(dNaN.raw.responsibilities, dEmpty.raw.responsibilities, 1e-12, ...
+testutil.assertClose(dNaN.raw.responsibilities, dEmpty.raw.responsibilities, 1e-12, ...
     'All-NaN responsibilities differ from empty feedback');
-assertClose(dNaN.raw.state_filtered_mean, dEmpty.raw.state_filtered_mean, 1e-12, ...
+testutil.assertClose(dNaN.raw.state_filtered_mean, dEmpty.raw.state_filtered_mean, 1e-12, ...
     'All-NaN filtered means differ from empty feedback');
-assertClose(dNaN.raw.bias, dEmpty.raw.bias, 1e-12, ...
+testutil.assertClose(dNaN.raw.bias, dEmpty.raw.bias, 1e-12, ...
     'All-NaN bias samples differ from empty feedback');
 assertFiniteMD(dNaN.raw);
 
@@ -151,9 +151,4 @@ for i = 1:numel(fields)
         assert(all(isfinite(D.(f)(:))), sprintf('Field %s contains nonfinite values', f));
     end
 end
-end
-
-function assertClose(actual, expected, tol, msg)
-err = max(abs(actual(:) - expected(:)));
-assert(err <= tol, sprintf('%s (max abs err %.3g)', msg, err));
 end
