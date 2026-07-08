@@ -33,18 +33,27 @@ classdef RealTimeCOIN < handle
         % multi-dimensional pipeline. See observe_y.m for the dispatch.
         state_dim (1,1) double {mustBeInteger,mustBePositive} = 1;
 
+        % Default hyperparameter values below are the fitted group-average
+        % parameters reported for the COIN model in Heald, Lengyel & Wolpert
+        % (2021), "Contextual inference underlies the learning of sensorimotor
+        % repertoires", Nature 600:489-493 (and its Supplementary Information).
+        % They match COIN.m's defaults and must be preserved for parity; do not
+        % rename or round these constants.
         gamma_context (1,1) double {mustBeNonnegative} = 0.1;
-        alpha_context (1,1) double {mustBePositive} = 8.955;
+        alpha_context (1,1) double {mustBePositive} = 8.955;    % DP context concentration (Heald 2021)
+        % rho_context: sticky self-transition weight in [0, 1) (Heald 2021).
         rho_context (1,1) double {mustBeNonnegative,mustBeLessThan(rho_context,1)} = 0.2501;
         gamma_cue (1,1) double {mustBeNonnegative} = 0.1;
         alpha_cue (1,1) double {mustBePositive} = 25;
 
-        prior_mean_retention (1,1) double = 0.9425;
+        prior_mean_retention (1,1) double = 0.9425;                      % prior mean of retention a (Heald 2021)
         prior_mean_drift (1,1) double = 0.0;
         prior_mean_bias (1,1) double = 0.0;
-        prior_precision_retention (1,1) double {mustBeNonnegative} = (837.1).^2;
-        prior_precision_drift (1,1) double {mustBeNonnegative} = (1.2227e3).^2;
-        prior_precision_bias (1,1) double {mustBeNonnegative} = (70).^2;
+        % Prior precisions are stored as variances of the fitted priors, i.e.
+        % (std)^2 with the std values reported in Heald et al. (2021).
+        prior_precision_retention (1,1) double {mustBeNonnegative} = (837.1).^2;  % retention (Heald 2021)
+        prior_precision_drift (1,1) double {mustBeNonnegative} = (1.2227e3).^2;   % drift (Heald 2021)
+        prior_precision_bias (1,1) double {mustBeNonnegative} = (70).^2;          % bias (Heald 2021)
 
         sigma_process_noise (1,1) double {mustBeNonnegative} = 0.0089;
         sigma_sensory_noise (1,1) double {mustBeNonnegative} = 0.03;

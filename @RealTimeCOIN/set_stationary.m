@@ -1,4 +1,21 @@
 function set_stationary(obj)
+%SET_STATIONARY Reset the particle filter to its stationary prior.
+%   set_stationary(obj) re-initialises the context and state beliefs of every
+%   particle to the stationary distribution implied by the current
+%   hyperparameters, then rewinds the trial counter to 0 and clears any
+%   pending cue. Use it to place a freshly configured model at its prior
+%   before feeding observations, or (via saveModel) to serialise a
+%   contingency-independent snapshot.
+%
+%   For each particle the stationary context distribution is derived from its
+%   local transition matrix, a context is sampled from it, and the per-context
+%   state mean/covariance are set to their stationary Kalman values. Both the
+%   scalar (state_dim == 1) and multi-dimensional branches are handled.
+%
+%   See also OBSERVE_Y, SAVEMODEL.
+    arguments
+        obj (1, 1) RealTimeCOIN
+    end
     obj.updateLocalTransitionMatrix();
     obj.updateLocalCueMatrix();
 
@@ -20,14 +37,14 @@ function set_stationary(obj)
         end
 
         T = obj.D.local_transition_matrix(valid, valid, p);
-        pi = RealTimeCOIN.stationary_distribution(T);
+        stationaryContextProb = RealTimeCOIN.stationary_distribution(T);
 
-        obj.D.prior_probabilities(valid, p) = pi(:);
-        obj.D.predicted_probabilities(valid, p) = pi(:);
-        obj.D.responsibilities(valid, p) = pi(:);
+        obj.D.prior_probabilities(valid, p) = stationaryContextProb(:);
+        obj.D.predicted_probabilities(valid, p) = stationaryContextProb(:);
+        obj.D.responsibilities(valid, p) = stationaryContextProb(:);
 
         validIdx = find(valid);
-        cumulative = cumsum(pi(:)');
+        cumulative = cumsum(stationaryContextProb(:)');
         cumulative(end) = 1;
         obj.D.context(p) = validIdx(find(rand <= cumulative, 1, 'first'));
     end
