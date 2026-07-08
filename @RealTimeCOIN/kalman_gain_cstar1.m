@@ -14,7 +14,7 @@ function k = kalman_gain_cstar1(obj)
     end
     mustBeScalarModel(obj, 'kalman_gain_cstar1');
     P = obj.num_particles;
-    gains = obj.D.state_var ./ obj.D.state_feedback_var;
+    gains = scalarKalmanGains(obj);
     [~, idx] = max(obj.D.responsibilities, [], 1);
     lin = sub2ind(size(gains), idx, 1:P);
     k = mean(gains(lin));

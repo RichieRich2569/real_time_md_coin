@@ -24,9 +24,3 @@ function s = state_cstar2(obj, q)
     [~, idx] = max(W, [], 1);
     s = selectContextStateMean(obj, idx);
 end
-
-function mustBeScalarOrEmpty(x)
-    if ~(isempty(x) || isscalar(x))
-        error('RealTimeCOIN:InvalidCue', 'q must be empty or a scalar cue label.');
-    end
-end
