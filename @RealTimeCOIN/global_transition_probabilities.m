@@ -13,9 +13,5 @@ function w = global_transition_probabilities(obj)
     alignment = ensureContextAlignment(obj);
     Wg = obj.globalContextWeights(obj.D.global_transition_probabilities, alignment);
     w = mean(Wg, 2)';
-    w(~isfinite(w)) = 0;
-    s = sum(w);
-    if s > 0
-        w = w ./ s;
-    end
+    w = renormalizeGlobalWeights(w);
 end

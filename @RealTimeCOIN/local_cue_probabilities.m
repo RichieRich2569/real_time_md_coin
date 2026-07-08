@@ -12,8 +12,8 @@ function L = local_cue_probabilities(obj)
         obj (1, 1) RealTimeCOIN
     end
     if isempty(obj.cue_values)
-        error('RealTimeCOIN:NoCues', ...
-            'local_cue_probabilities requires the model to have observed sensory cues.');
+        error("RealTimeCOIN:NoCues", ...
+            "local_cue_probabilities requires the model to have observed sensory cues.");
     end
     alignment = ensureContextAlignment(obj);
     K = alignment.K;
