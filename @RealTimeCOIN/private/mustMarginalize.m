@@ -1,4 +1,4 @@
-function mustMarginalize = mustMarginalize(obj, prob)
+function mustMarginalize(obj, prob)
 %MUSTMARGINALIZE Argument validator: mixing weights marginalise over context.
 %
 %   mustMarginalize(obj, prob) is an arguments-block validator shared by the
@@ -8,19 +8,24 @@ function mustMarginalize = mustMarginalize(obj, prob)
 %   (each particle's context distribution is a proper pmf); the 1e-6 tolerance
 %   absorbs floating-point round-off in that sum.
 %
-%   The function also returns the check result as a logical for callers that
-%   want it, but its primary role is as a validator: the arguments block below
-%   enforces that prob is finite and nonnegative.
+%   As an arguments-block validator the function returns no value: it validates
+%   and throws on failure. The arguments block enforces that prob is finite and
+%   nonnegative; when prob has one row per context slot and any column-sum
+%   deviates from one by more than 1e-6, a "RealTimeCOIN:MustMarginalize" error
+%   is raised. Column layouts with a different row count are not context weight
+%   matrices and are left unchecked.
 %
 %   See also state_probability, state_feedback_probability.
     arguments
         obj (1, 1) RealTimeCOIN
         prob (:, :) double {mustBeFinite, mustBeNonnegative}
     end
-    mustMarginalize = true;
     if size(prob, 1) == obj.max_contexts + 1
         if any(abs(sum(prob, 1) - 1) > 1e-6)
-            mustMarginalize = false;
+            error("RealTimeCOIN:MustMarginalize", ...
+                "Per-context mixing weights must marginalise to one over " + ...
+                "contexts; a column-sum deviates from one by more than the " + ...
+                "1e-6 tolerance.");
         end
     end
 end
