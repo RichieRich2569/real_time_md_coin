@@ -21,6 +21,13 @@ function densities = mixtureDensityOnGrid(obj, values, W, M, V, normalizer, meth
 %
 %   methodName labels the caller in the grid-dimension-mismatch error. This is a
 %   read-only evaluation: it uses no randomness and mutates no model state.
+%
+%   The two shared input validators the per-method arguments blocks used to apply
+%   are re-applied here (they were lost when those methods were consolidated into
+%   this helper): mustMarginalize checks the per-particle mixing weights sum to 1
+%   (a no-op for the novel-context callers, whose W is a 1-by-used row), and
+%   mustBeCovarianceMatrix screens the MD covariance pages.
+    mustMarginalize(obj, W);
     if obj.state_dim == 1
         values = values(:)';
         densities = zeros(size(values));
@@ -44,6 +51,7 @@ function densities = mixtureDensityOnGrid(obj, values, W, M, V, normalizer, meth
             "state_dim == %d; received a %d-by-%d array.", ...
             methodName, N, N, size(values, 1), size(values, 2));
     end
+    mustBeCovarianceMatrix(V);
     K = size(values, 2);
     densities = zeros(1, K);
     for p = 1:size(W, 2)
