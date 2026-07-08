@@ -19,8 +19,5 @@ function d = gaussianJeffreysMulti(obj, m1, s1, m2, s2)
     delta = m1 - m2;
     k = numel(m1);
     d = 0.5 .* (trace(inv2 * s1 + inv1 * s2) + delta' * (inv1 + inv2) * delta - 2 .* k);
-    if ~isfinite(d)
-        d = realmax;  % sentinel: "infinitely divergent" but still finite
-    end
-    d = max(d, 0);    % divergence is non-negative; clip round-off below 0
+    d = jeffreysFiniteClip(d);   % finite sentinel + non-negativity clip
 end
