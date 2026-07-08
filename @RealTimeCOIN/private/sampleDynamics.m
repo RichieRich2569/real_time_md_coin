@@ -20,8 +20,8 @@ function sampleDynamics(obj)
     qVar = obj.sigma_process_noise^2;           % process-noise variance (scales the data precision)
     for p = 1:P
         for c = 1:Cmax
-            ss2 = squeeze(obj.D.dynamics_ss_2(c,p,:,:));  % 2x2 regressor Gram matrix
-            ss1 = squeeze(obj.D.dynamics_ss_1(c,p,:));    % 2x1 regressor-response cross term
+            ss2 = obj.D.dynamics_ss_2(:,:,c,p);   % 2x2 regressor Gram matrix
+            ss1 = obj.D.dynamics_ss_1(:,c,p);     % 2x1 regressor-response cross term
             if qVar == 0
                 % Zero process noise means a deterministic AR(1): the data
                 % carry infinite precision. Divide by eps instead of 0 so the

@@ -39,8 +39,8 @@ function resampleState(obj, idx)
     % Higher-rank fields carry the particle on an explicit trailing axis.
     obj.D.n_context = obj.D.n_context(:, :, idx);           % Cmax x Cmax x P
     obj.D.n_cue = obj.D.n_cue(:, :, idx);                   % Cmax x 1    x P
-    obj.D.dynamics_ss_1 = obj.D.dynamics_ss_1(:, idx, :);   % Cmax x P    x 2
-    obj.D.dynamics_ss_2 = obj.D.dynamics_ss_2(:, idx, :, :); % Cmax x P x 2 x 2
+    obj.D.dynamics_ss_1 = obj.D.dynamics_ss_1(:, :, idx);    % 2 x Cmax x P
+    obj.D.dynamics_ss_2 = obj.D.dynamics_ss_2(:, :, :, idx); % 2 x 2 x Cmax x P
     obj.D.global_cue_probabilities = obj.D.global_cue_probabilities(:, idx); % 1 x P
     obj.D.local_transition_matrix = obj.D.local_transition_matrix(:, :, idx);
     obj.D.local_cue_matrix = obj.D.local_cue_matrix(:, :, idx);

@@ -38,20 +38,23 @@ function updateSufficientStatistics(obj, y, q)
     % Skipped on trial 0 (no previous state yet). xAug stacks the augmented
     % regressor along the trailing dimension: slice 1 = s_{i-1}, slice 2 = 1.
     if obj.trial > 0
-        xAug = ones(Cmax, P, 2);
-        xAug(:,:,1) = obj.D.previous_x_dynamics;
+        % xAug stacks the augmented regressor on the LEADING axis: row 1 =
+        % s_{i-1}, row 2 = 1, with context/particle trailing (2 x Cmax x P).
+        xAug = ones(2, Cmax, P);
+        xAug(1,:,:) = reshape(obj.D.previous_x_dynamics, 1, Cmax, P);
         % Only contexts that have been visited (any incoming transition count)
-        % contribute; observedRows is the Cmax x P mask of such contexts.
-        observedRows = squeeze(sum(obj.D.n_context, 2)) > 0;
+        % contribute; obsMask is the 1 x Cmax x P mask of such contexts.
+        observedRows = squeeze(sum(obj.D.n_context, 2)) > 0;   % Cmax x P
+        obsMask = reshape(observedRows, 1, Cmax, P);
         % dynamics_ss_1 accumulates s_i * [s_{i-1}; 1] (the y*x cross term).
-        ss1 = obj.D.x_dynamics .* xAug;
-        obj.D.dynamics_ss_1 = obj.D.dynamics_ss_1 + ss1 .* observedRows;
+        ss1 = reshape(obj.D.x_dynamics, 1, Cmax, P) .* xAug;   % 2 x Cmax x P
+        obj.D.dynamics_ss_1 = obj.D.dynamics_ss_1 + ss1 .* obsMask;
         % dynamics_ss_2 accumulates the 2x2 Gram matrix [s_{i-1};1]*[s_{i-1};1]'
         % (x*x') for each context/particle; a,b index its four entries.
         for a = 1:2
             for b = 1:2
-                obj.D.dynamics_ss_2(:,:,a,b) = obj.D.dynamics_ss_2(:,:,a,b) + ...
-                    xAug(:,:,a) .* xAug(:,:,b) .* observedRows;
+                obj.D.dynamics_ss_2(a,b,:,:) = obj.D.dynamics_ss_2(a,b,:,:) + ...
+                    reshape(xAug(a,:,:) .* xAug(b,:,:) .* obsMask, 1, 1, Cmax, P);
             end
         end
     end

@@ -35,8 +35,10 @@ function resetParticles(obj)
 
     D.n_context = zeros(Cmax, Cmax, P);
     D.n_cue = zeros(Cmax, 1, P);
-    D.dynamics_ss_1 = zeros(Cmax, P, 2);
-    D.dynamics_ss_2 = zeros(Cmax, P, 2, 2);
+    % Feature dims lead, particle trails (2-by-Cmax-by-P / 2-by-2-by-Cmax-by-P),
+    % matching the MD accumulators Lambda_yx / Lambda_xx convention.
+    D.dynamics_ss_1 = zeros(2, Cmax, P);
+    D.dynamics_ss_2 = zeros(2, 2, Cmax, P);
     D.bias_ss_1 = zeros(Cmax, P);
     D.bias_ss_2 = zeros(Cmax, P);
 
