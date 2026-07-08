@@ -49,6 +49,9 @@ function [mu, v] = scalarMoments(obj, weights, Cmax, P)
 %SCALARMOMENTS One-step predictive feedback moments for the scalar model.
     stateMean = obj.D.retention .* obj.D.state_filtered_mean + obj.D.drift;
     stateVar = obj.D.retention.^2 .* obj.D.state_filtered_var + obj.sigma_process_noise^2;
+    % The novel-context slot has no filtered state yet, so predict it from the
+    % stationary distribution of its AR(1) dynamics: mean d/(1-a), variance
+    % sigma_process^2/(1-a^2) (eps guards against the a -> 1 singularity).
     for p = 1:P
         novel = min(obj.D.C(p) + 1, Cmax);
         if obj.D.C(p) < obj.max_contexts
@@ -74,6 +77,9 @@ function [mu, Sigma] = multiMoments(obj, weights, Cmax, P)
 
     mu = zeros(N, 1);
     second = zeros(N, N);
+    % Explicit nested loop over particles and contexts; kept unvectorised so
+    % the mixture accumulation order is preserved exactly (read-only query,
+    % no RNG). See "Deferred optimizations" in the quality review.
     for p = 1:P
         novel = min(obj.D.C(p) + 1, Cmax);
         for c = 1:Cmax
@@ -101,6 +107,10 @@ function [mu, Sigma] = multiMoments(obj, weights, Cmax, P)
 end
 
 function mustBeScalarOrEmpty(x)
+%MUSTBESCALAROREMPTY Local validator: accept only a scalar or empty cue.
+%   Retained as a local copy (rather than the R2020b+ builtin of the same
+%   name) so the class validates identically on older MATLAB releases and
+%   emits the class-specific error identifier below.
     if ~(isempty(x) || isscalar(x))
         error('RealTimeCOIN:InvalidCue', ...
             'q must be empty or a scalar cue label.');
