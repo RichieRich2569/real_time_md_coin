@@ -77,8 +77,7 @@ function sampleStatesMD(obj, y, obsMask)
                 postMean = dynMean;
                 postCov = Q;
             else
-                postCov = obj.safeInverse(Qi + obsPrecision);
-                postCov = (postCov + postCov') ./ 2;
+                postCov = postCovActive;   % hoisted: context/particle-invariant
                 bias = obj.D.bias(:, c, p);
                 obsInfo = zeros(N, 1);
                 obsInfo(obsIdx) = Ri_obs * (yv(obsIdx) - bias(obsIdx));
