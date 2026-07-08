@@ -43,7 +43,7 @@ for t = 1:T
     a = trapz(grid, dens); if a > 0, dens = dens / a; end
     predMean(t) = trapz(grid, dens .* grid);         % posterior mean by integration
 
-    probs = coin.context_responsibilities();         % containers.Map: context -> responsibility
+    probs = coin.responsibilities_map();         % containers.Map: context -> responsibility
     fprintf('Trial %d (cue %d): E[state]=% .3f, contexts={', t, cues(t), predMean(t));
     kk = cell2mat(probs.keys);
     for k = kk, fprintf(' %d:%.2f', k, probs(k)); end
@@ -138,7 +138,7 @@ for t = 1:numel(cueSeq)
     coin.observe_q(cueSeq(t));
     coin.observe_y(valSeq(t) + coin.sigma_sensory_noise * randn);
 end
-fprintf('Before save: Trial = %d, active contexts = %d\n', coin.Trial, coin.context_responsibilities().Count);
+fprintf('Before save: Trial = %d, active contexts = %d\n', coin.Trial, coin.responsibilities_map().Count);
 
 tmpFile = [tempname '.mat'];
 
@@ -146,8 +146,8 @@ tmpFile = [tempname '.mat'];
 coin.saveModel(tmpFile, false);
 reloaded = RealTimeCOIN('infer_bias', true);
 reloaded.loadModel(tmpFile);
-r1 = coin.context_responsibilities();
-r2 = reloaded.context_responsibilities();
+r1 = coin.responsibilities_map();
+r2 = reloaded.responsibilities_map();
 maxDiff = max(abs(cell2mat(r1.values) - cell2mat(r2.values)));
 fprintf('Non-stationary reload: Trial = %d, max responsibility diff = %.2e\n', ...
     reloaded.Trial, maxDiff);
@@ -157,7 +157,7 @@ coin.saveModel(tmpFile, true);
 stationaryModel = RealTimeCOIN('infer_bias', true);
 stationaryModel.loadModel(tmpFile);
 fprintf('Stationary reload:     Trial = %d (reset), active contexts = %d (retained)\n', ...
-    stationaryModel.Trial, stationaryModel.context_responsibilities().Count);
+    stationaryModel.Trial, stationaryModel.responsibilities_map().Count);
 
 % (c) set_stationary applied in place to a copy trained the same way. It drives
 %     the model onto the stationary distribution of its own learned context
@@ -168,8 +168,8 @@ piAnalytic = coin.stationary_context_probabilities();   % 1-by-K analytic statio
 coin.set_stationary();
 fprintf('After set_stationary:  Trial = %d\n', coin.Trial);
 
-predicted = coin.predicted_context_probabilities();     % 1-by-(max_contexts+1)
-resp      = coin.responsibilities();
+predicted = coin.predicted_context_probabilities_vector();     % 1-by-(max_contexts+1)
+resp      = coin.responsibilities_vector();
 Kk        = numel(piAnalytic);
 predKnown = predicted(1:Kk) / sum(predicted(1:Kk));     % drop the novel slot, renormalise
 fprintf('stationary_context_probabilities (analytic) : [%s]\n', num2str(piAnalytic, '%.3f '));
@@ -219,12 +219,12 @@ coinviz.densityLines(grid, coin.state_given_context_probability(grid), ...
     'NovelDensity', coin.novel_state_probability(grid));
 
 % Context summaries: global Maps, global vectors, and the alignment struct.
-cpm = coin.context_predicted_probabilities();     % Map
-crm = coin.context_responsibilities();            % Map
+cpm = coin.predicted_context_probabilities_map();     % Map
+crm = coin.responsibilities_map();            % Map
 fprintf('context_predicted_probabilities .. %d contexts\n', cpm.Count);
 fprintf('context_responsibilities ......... %d contexts\n', crm.Count);
-fprintf('predicted_context_probabilities .. [%s]\n', num2str(coin.predicted_context_probabilities(), '%.2f '));
-fprintf('responsibilities ................. [%s]\n', num2str(coin.responsibilities(), '%.2f '));
+fprintf('predicted_context_probabilities .. [%s]\n', num2str(coin.predicted_context_probabilities_vector(), '%.2f '));
+fprintf('responsibilities ................. [%s]\n', num2str(coin.responsibilities_vector(), '%.2f '));
 fprintf('sampled_context_count ............ [%s]\n', num2str(coin.sampled_context_count(), '%.2f '));
 fprintf('sampled_context_count_local ...... [%s]\n', num2str(coin.sampled_context_count_local(), '%.2f '));
 al = coin.context_alignment();
@@ -335,8 +335,8 @@ csE = zeros(1, T); csS = zeros(1, T);
 for t = 1:T
     eager.observe_y(fb(t));
     sticky.observe_y(fb(t));
-    prevE(t, :) = eager.predicted_context_probabilities();
-    prevS(t, :) = sticky.predicted_context_probabilities();
+    prevE(t, :) = eager.predicted_context_probabilities_vector();
+    prevS(t, :) = sticky.predicted_context_probabilities_vector();
     csE(t) = eager.state_cstar1();
     csS(t) = sticky.state_cstar1();
 end

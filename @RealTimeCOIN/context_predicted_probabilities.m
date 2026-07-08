@@ -1,26 +1,24 @@
 function probs = context_predicted_probabilities(obj)
-%CONTEXT_PREDICTED_PROBABILITIES Predicted context probabilities as a map.
+%CONTEXT_PREDICTED_PROBABILITIES (deprecated) Alias for the *_MAP form.
 %
-%   probs = context_predicted_probabilities(obj) returns a containers.Map keyed
-%   by aligned global context label (double) whose values are the prior
-%   (pre-observation) context probabilities for the current trial. Only contexts
-%   with strictly positive probability are included as keys. This triggers (and
-%   caches) the lazy context alignment.
+%   Kept for backward compatibility. Forwards to
+%   predicted_context_probabilities_map and emits a one-time deprecation warning
+%   per session. The old name is confusing because the near-identically named
+%   PREDICTED_CONTEXT_PROBABILITIES returned a vector; prefer the explicit
+%   predicted_context_probabilities_map / predicted_context_probabilities_vector.
 %
-%   Naming hazard: this is the MAP form; the near-identically named
-%   PREDICTED_CONTEXT_PROBABILITIES returns the same weights as a plain row
-%   vector. See CONTEXT_RESPONSIBILITIES for the posterior (map) counterpart.
-%
-%   See also PREDICTED_CONTEXT_PROBABILITIES, CONTEXT_RESPONSIBILITIES,
-%   CONTEXT_ALIGNMENT.
+%   See also PREDICTED_CONTEXT_PROBABILITIES_MAP,
+%   PREDICTED_CONTEXT_PROBABILITIES_VECTOR.
     arguments
         obj (1, 1) RealTimeCOIN
     end
-    weights = contextProbabilityVector(obj, "predicted");
-    probs = containers.Map('KeyType', 'double', 'ValueType', 'double');
-    for c = 1:numel(weights)
-        if weights(c) > 0
-            probs(c) = weights(c);
-        end
+    persistent warned
+    if isempty(warned)
+        warning("RealTimeCOIN:DeprecatedMethod", ...
+            "context_predicted_probabilities is deprecated; use " + ...
+            "predicted_context_probabilities_map (containers.Map) or " + ...
+            "predicted_context_probabilities_vector (row vector).");
+        warned = true;
     end
+    probs = obj.predicted_context_probabilities_map();
 end

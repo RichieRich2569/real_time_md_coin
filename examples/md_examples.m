@@ -322,12 +322,12 @@ fprintf('predictive_cue_p_value(2, 0.5) ... %.3f\n', coin.predictive_cue_p_value
 [mS, cS] = coin.state_moments();
 fprintf('state_moments .................... mean [%s], cov diag [%s]\n', ...
     num2str(mS', '%.3f '), num2str(diag(cS)', '%.4f '));
-fprintf('predicted_context_probabilities .. [%s]\n', num2str(coin.predicted_context_probabilities(), '%.2f '));
-fprintf('responsibilities ................. [%s]\n', num2str(coin.responsibilities(), '%.2f '));
+fprintf('predicted_context_probabilities .. [%s]\n', num2str(coin.predicted_context_probabilities_vector(), '%.2f '));
+fprintf('responsibilities ................. [%s]\n', num2str(coin.responsibilities_vector(), '%.2f '));
 fprintf('sampled_context_count ............ [%s]\n', num2str(coin.sampled_context_count(), '%.2f '));
 fprintf('sampled_context_count_local ...... [%s]\n', num2str(coin.sampled_context_count_local(), '%.2f '));
-fprintf('context_predicted_probabilities .. %d contexts\n', coin.context_predicted_probabilities().Count);
-fprintf('context_responsibilities ......... %d contexts\n', coin.context_responsibilities().Count);
+fprintf('context_predicted_probabilities .. %d contexts\n', coin.predicted_context_probabilities_map().Count);
+fprintf('context_responsibilities ......... %d contexts\n', coin.responsibilities_map().Count);
 fprintf('context_alignment ................ K = %d\n', coin.context_alignment().K);
 
 % New per-trial c*/component read-outs (MD returns N-by-1 states).
@@ -365,7 +365,7 @@ end
 
 % Stationary save / load round-trip (MD).
 tmpFile = [tempname '.mat'];
-before = coin.responsibilities();
+before = coin.responsibilities_vector();
 coin.saveModel(tmpFile, true);                       % stationarize + save
 reloaded = RealTimeCOIN('state_dim', N, 'infer_bias', true);
 reloaded.loadModel(tmpFile);
@@ -376,12 +376,12 @@ fprintf('saveModel/loadModel (MD) ......... reloaded Trial = %d (reset by set_st
 piAnalytic = coin.stationary_context_probabilities();
 coin.set_stationary();
 fprintf('set_stationary (MD) .............. Trial = %d\n', coin.Trial);
-predicted = coin.predicted_context_probabilities();
+predicted = coin.predicted_context_probabilities_vector();
 Kk = numel(piAnalytic);
 predKnown = predicted(1:Kk) / sum(predicted(1:Kk));
 fprintf('stationary match (MD): analytic [%s] vs adopted [%s], max diff %.3f\n', ...
     num2str(piAnalytic, '%.3f '), num2str(predKnown, '%.3f '), max(abs(piAnalytic - predKnown)));
-assert(max(abs(coin.predicted_context_probabilities() - coin.responsibilities())) < 1e-9, ...
+assert(max(abs(coin.predicted_context_probabilities_vector() - coin.responsibilities_vector())) < 1e-9, ...
     'MD predicted == responsibilities after set_stationary');
 delete(tmpFile);
 fprintf('===================================================\n');
@@ -408,7 +408,7 @@ for t = 1:T
     [mu, Sigma] = coin.predictive_feedback_moments(1);
     predMean(:, t) = mu;
     predSd(:, t) = sqrt(diag(Sigma));
-    prevCtx(t, :) = coin.predicted_context_probabilities();
+    prevCtx(t, :) = coin.predicted_context_probabilities_vector();
 
     y = tgt + 0.03 * randn(N, 1);
     if ismember(t, allNaN)

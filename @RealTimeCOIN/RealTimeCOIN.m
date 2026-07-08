@@ -16,8 +16,12 @@ classdef RealTimeCOIN < handle
     %   bias_probability, local_transition_probabilities, local_cue_probabilities,
     %   global_transition_probabilities, global_cue_probabilities,
     %   stationary_context_probabilities. Probability vectors:
-    %   predicted_context_probabilities, responsibilities (and *_local variants),
-    %   sampled_context_count. Scalar summaries: motor_output, state_moments,
+    %   predicted_context_probabilities_vector, responsibilities_vector (and
+    %   *_local variants), sampled_context_count; containers.Map forms
+    %   predicted_context_probabilities_map, responsibilities_map. (The
+    %   un-suffixed predicted_context_probabilities / context_predicted_probabilities
+    %   / responsibilities / context_responsibilities remain as deprecated aliases.)
+    %   Scalar summaries: motor_output, state_moments,
     %   explicit_component, implicit_component, and the c* traces
     %   state_cstar1/2/3, predicted_probability_cstar1/3, kalman_gain_cstar1/2.
     %   Retention/drift/bias densities and scalar Kalman gains are scalar-model

@@ -10,7 +10,7 @@ coin.observe_y(NaN);              % cue-only channel trial
 coin.observe_q(42);
 coin.observe_y([]);               % second channel style
 assert(coin.Trial == 3, 'Trial counter mismatch for edge observations');
-assert(abs(sum(coin.responsibilities()) - 1) < 1e-9, 'Responsibilities not normalized');
+assert(abs(sum(coin.responsibilities_vector()) - 1) < 1e-9, 'Responsibilities not normalized');
 
 diag = coin.diagnostics();
 assert(all(diag.C <= coin.max_contexts), 'Context cap exceeded');

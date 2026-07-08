@@ -1,25 +1,21 @@
 function probs = context_responsibilities(obj)
-%CONTEXT_RESPONSIBILITIES Posterior context responsibilities as a map.
+%CONTEXT_RESPONSIBILITIES (deprecated) Alias for RESPONSIBILITIES_MAP.
 %
-%   probs = context_responsibilities(obj) returns a containers.Map keyed by
-%   aligned global context label (double) whose values are the posterior
-%   (post-observation) context probabilities for the current trial. Only contexts
-%   with strictly positive probability are included as keys. This triggers (and
-%   caches) the lazy context alignment.
+%   Kept for backward compatibility. Forwards to responsibilities_map and emits a
+%   one-time deprecation warning per session. The old name is confusing because
+%   the near-identically named RESPONSIBILITIES returned a vector; prefer the
+%   explicit responsibilities_map / responsibilities_vector.
 %
-%   This is the MAP form; RESPONSIBILITIES returns the same weights as a plain
-%   row vector. CONTEXT_PREDICTED_PROBABILITIES is the prior (map) counterpart.
-%
-%   See also RESPONSIBILITIES, CONTEXT_PREDICTED_PROBABILITIES,
-%   CONTEXT_ALIGNMENT.
+%   See also RESPONSIBILITIES_MAP, RESPONSIBILITIES_VECTOR.
     arguments
         obj (1, 1) RealTimeCOIN
     end
-    weights = contextProbabilityVector(obj, "responsibilities");
-    probs = containers.Map('KeyType', 'double', 'ValueType', 'double');
-    for c = 1:numel(weights)
-        if weights(c) > 0
-            probs(c) = weights(c);
-        end
+    persistent warned
+    if isempty(warned)
+        warning("RealTimeCOIN:DeprecatedMethod", ...
+            "context_responsibilities is deprecated; use responsibilities_map " + ...
+            "(containers.Map) or responsibilities_vector (row vector).");
+        warned = true;
     end
+    probs = obj.responsibilities_map();
 end
