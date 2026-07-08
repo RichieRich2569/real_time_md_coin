@@ -1,4 +1,12 @@
 function state = serializableState(obj)
+%SERIALIZABLESTATE Capture the full model state as a plain struct for saving.
+%   state = serializableState(obj) collects everything needed to reconstruct
+%   the model into a plain struct suitable for save/load and saveModel: every
+%   public property (except the dependent Trial, which is derived from trial)
+%   under state.properties, plus the private particle store D, the staged cue
+%   pending_q, the trial counter, the cue_values lookup, and the alignment
+%   bookkeeping (state_version, alignment_seed). restoreSerializableState is
+%   the inverse.
     state = struct();
     props = properties(obj);
     for i = 1:numel(props)

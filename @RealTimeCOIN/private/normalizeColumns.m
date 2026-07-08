@@ -1,5 +1,10 @@
 function X = normalizeColumns(~, X)
-    % Marginialise columns of X to sum to 1.
+%NORMALIZECOLUMNS Normalise each column of a matrix to sum to 1.
+%   X = normalizeColumns(obj, X) rescales every column of X so it sums to 1.
+%   A column whose sum is zero or non-finite collapses to the unit vector
+%   e_1 (all mass on the first row), which keeps context-weight columns valid
+%   even for degenerate particles. The leading obj argument is ignored (private
+%   RealTimeCOIN method invoked as obj.normalizeColumns).
     arguments
         ~
         X (:,:) double

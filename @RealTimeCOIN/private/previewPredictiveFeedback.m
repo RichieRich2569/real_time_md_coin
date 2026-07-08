@@ -1,4 +1,17 @@
 function [W, M, V] = previewPredictiveFeedback(obj, q)
+%PREVIEWPREDICTIVEFEEDBACK One-step predictive feedback mixture (scalar model).
+%   [W, M, V] = previewPredictiveFeedback(obj, q) performs a read-only one-step
+%   look-ahead from the current posterior, returning the per-particle,
+%   per-context Gaussian-mixture components of the next observation given the
+%   optional upcoming cue label q (q = [] marginalises the cue out):
+%       W : (max_contexts+1)-by-P normalised mixture weights,
+%       M : (max_contexts+1)-by-P predictive feedback means,
+%       V : (max_contexts+1)-by-P predictive feedback variances.
+%   Each component mirrors the scalar Kalman one-step prediction in
+%   predictStateFeedback: state s' = a*s + d with variance a^2*var + Q, then
+%   feedback mean s' + bias and variance + observation variance. The first
+%   not-yet-instantiated ("novel") context uses the stationary prediction
+%   instead. Multi-dimensional counterpart: previewPredictiveFeedbackMD.
     arguments
         obj (1, 1) RealTimeCOIN
         q double {mustBeScalarOrEmpty, mustBeInteger, mustBeFinite, mustBeNonnegative} = []
@@ -33,10 +46,4 @@ function [W, M, V] = previewPredictiveFeedback(obj, q)
     end
     M = Mstate + obj.D.bias;
     V = Vstate + obj.observationVariance();
-end
-
-function mustBeScalarOrEmpty(x)
-    if ~isscalar(x) && ~isempty(x)
-        error('Input must be a scalar or empty.');
-    end
 end

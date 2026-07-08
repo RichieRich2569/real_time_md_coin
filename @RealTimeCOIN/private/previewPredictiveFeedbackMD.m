@@ -65,9 +65,3 @@ function [W, M, Cov] = previewPredictiveFeedbackMD(obj, q)
         end
     end
 end
-
-function mustBeScalarOrEmpty(x)
-    if ~isscalar(x) && ~isempty(x)
-        error('Input must be a scalar or empty.');
-    end
-end
