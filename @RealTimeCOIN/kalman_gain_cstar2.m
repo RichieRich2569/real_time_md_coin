@@ -20,14 +20,8 @@ function k = kalman_gain_cstar2(obj, q)
     qLabel = peekCueLabel(obj, q);
     W = nextTrialContextWeights(obj, qLabel);
     P = obj.num_particles;
-    gains = obj.D.state_var ./ obj.D.state_feedback_var;
+    gains = scalarKalmanGains(obj);
     [~, idx] = max(W, [], 1);
     lin = sub2ind(size(gains), idx, 1:P);
     k = mean(gains(lin));
-end
-
-function mustBeScalarOrEmpty(x)
-    if ~(isempty(x) || isscalar(x))
-        error('RealTimeCOIN:InvalidCue', 'q must be empty or a scalar cue label.');
-    end
 end

@@ -16,11 +16,7 @@ function densities = drift_given_context_probability(obj, values)
 
     densities = containers.Map('KeyType', 'double', 'ValueType', 'any');
     alignment = ensureContextAlignment(obj);
-    active = activeSummaryContexts(obj);
-    active = active(active <= alignment.K);
-    if isempty(active) && alignment.K > 0
-        active = 1;
-    end
+    active = clampActiveSummaryContexts(obj, alignment);
 
     values = values(:)';
     M = alignment.global_contexts.dynamics_mean(2, :);

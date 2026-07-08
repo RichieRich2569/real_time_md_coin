@@ -13,6 +13,10 @@ function e = explicit_component(obj)
         obj (1, 1) RealTimeCOIN
     end
     if obj.trial <= 1
+        % Before the first feedback is processed the responsibilities are
+        % uniform/uninformative, so their argmax is arbitrary. COIN falls back
+        % to context 1 for every particle here; match that so the explicit
+        % component is well-defined on trial 1.
         idx = ones(1, obj.num_particles);
     else
         [~, idx] = max(obj.D.responsibilities, [], 1);
