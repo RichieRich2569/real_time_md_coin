@@ -1,4 +1,22 @@
 function resetParticles(obj)
+%RESETPARTICLES Initialise particle storage for the scalar (1-D) model.
+%   resetParticles(obj) allocates and seeds the particle-state struct obj.D
+%   for a fresh run of the scalar model, then rebuilds the derived local
+%   transition/cue matrices and invalidates any cached context alignment.
+%
+%   When state_dim > 1 the call is forwarded to resetParticlesMD; the scalar
+%   branch below is kept byte-for-byte equivalent to the original COIN
+%   initialisation so the default (state_dim == 1) path is unchanged.
+%
+%   Layout (Cmax = max_contexts + 1, P = num_particles): scalar per-context
+%   parameters (retention, drift, bias) and state summaries are Cmax-by-P;
+%   dynamics sufficient statistics are Cmax-by-P-by-2[-by-2]; context-inference
+%   counts are Cmax-by-Cmax-by-P (transitions) and Cmax-by-1-by-P (cues). Every
+%   context starts in slot 1 (the only instantiated context) with the novel
+%   slots seeded from the priors. See CODE_REVIEW.md for the full field map.
+%
+%   See also RESETPARTICLESMD, RESAMPLESTATE.
+
     % Dispatch to the multi-dimensional initialiser when state_dim > 1; the
     % scalar branch below is left exactly as in the original implementation
     % so that the default (state_dim == 1) behaviour is unchanged.
