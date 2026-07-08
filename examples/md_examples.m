@@ -203,6 +203,7 @@ end
 feedbacks = trueState + 0.02 * randn(N, T);
 
 motorOutput = zeros(N, T); postMean = zeros(N, T);
+Cwidth = coin.max_contexts + 1;   % set from THIS section's model (was carried over)
 postCtx = zeros(T, Cwidth);
 for t = 1:T
     motorOutput(:, t) = coin.predictive_motor_output();
