@@ -20,20 +20,14 @@ function weights = localContextProbabilityVector(obj, kind)
         return;
     end
 
-    switch kind
-        case "predicted"
-            W = obj.D.predicted_probabilities(:, modalIdx);
-            weights = mean(W, 2)';
-        case "responsibilities"
-            W = obj.D.responsibilities(:, modalIdx);
-            weights = mean(W, 2)';
-        case "count"
-            c = obj.D.context(modalIdx);
-            % Integer-centred bin edges 0.5, 1.5, ..., Cmax+0.5 so that
-            % histcounts places each context label k in its own bin k.
-            edges = 0.5:1:(Cmax + 0.5);
-            weights = histcounts(c, edges) ./ numel(c);
-    end
+    % Integer-centred bin edges 0.5, 1.5, ..., Cmax+0.5 so that histcounts places
+    % each context label k in its own bin k.
+    edges = 0.5:1:(Cmax + 0.5);
+    weights = contextProbabilityVectorCore(kind, ...
+        @() obj.D.predicted_probabilities(:, modalIdx), ...
+        @() obj.D.responsibilities(:, modalIdx), ...
+        @() obj.D.context(modalIdx), ...
+        edges);
 
     if Km >= obj.max_contexts
         % All contexts instantiated: no novel slot beyond Km.
@@ -43,9 +37,5 @@ function weights = localContextProbabilityVector(obj, kind)
         weights(Km+2:end) = 0;
     end
 
-    weights(~isfinite(weights)) = 0;
-    s = sum(weights);
-    if s > 0
-        weights = weights ./ s;
-    end
+    weights = renormalizeGlobalWeights(weights);
 end
