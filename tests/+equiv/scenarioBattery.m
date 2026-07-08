@@ -36,7 +36,7 @@ function scenarios = scenarioBattery()
         [name, seed, nP, nC, dim, T, cues, missFrac] = specs{i, :};
         inputSeed = 7000 + i;                 % distinct from model seed
         [q, y] = makeInputs(inputSeed, dim, T, cues, missFrac);
-        scenarios(i).name = name; %#ok<AGROW>
+        scenarios(i).name = name;
         scenarios(i).seed = seed;
         scenarios(i).args = {'num_particles', nP, 'max_contexts', nC, ...
             'state_dim', dim};

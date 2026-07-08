@@ -1,11 +1,52 @@
 # IMPROVEMENTS_REPORT.md
 
-Algorithm-level and structural changes that the **safe-pass quality batch deliberately did
-NOT implement**, collected from all 18 work units for your review. Everything here needs a
-numeric-equivalence check against `COIN.m` (and, for the inference path, the full
-`run_tests` + `run_validation` suite) before it can land — which is exactly why the batch
-deferred it. Items are grouped by type and tagged with the originating unit and
-`file:line` where available.
+## Experimental-branch changelog (what was implemented)
+
+The `experimental` branch implements the deferred items below, each validated by an
+equivalence harness (`tests/+equiv`) that diffs a scalar+MD scenario battery against a
+`main` snapshot, plus `run_tests` (13/13) and `run_validation` (passed, COIN mean RMSE
+0.0102 — unchanged from `main`). **Class A** = bit-identical to `main` (harness zero-diff).
+**Class B** = trajectory-changing, kept only if materially faster (rule: no divergence for
+no gain). Net hot-path perf: **md2 −8%, md3 −8%** vs `main` (P=200, T=60).
+
+**Structural de-dup (§5) — Class A, done:** `ensurePD` (4-way PD-repair consolidation) +
+`jeffreysFiniteClip`; `scatterToGlobal` (5 global-aggregation files);
+`contextProbabilityVectorCore`; `mixtureDensityOnGrid` + `feedbackTransform` (6 density
+methods); `currentTransitionPrior` (4 preview helpers); `minAssignment` inlined.
+
+**Inference-path vectorization/caching — Class A, done:** `predictContext` transition-prior
+gather (linear indexing); `updateLocalTransition/CueMatrix` row-normalize; `sampleStatesMD`
+active-posterior inversion hoist; `predictStateFeedbackMD` `repmat`→implicit expansion.
+
+**Perf — pagewise MD batching (§3/§4) — Class B, evaluated:** `predictStatesMD` batched via
+`pagemtimes` — **bit-identical AND ~8% faster → KEPT**. `resampleParticlesMD` batched via
+`pagechol`/`pagemldivide` — bit-identical but **no speedup at N=2–3 → REVERTED** (rule 2).
+Profiling showed the hot path is RNG-sequential per-cell sampling
+(`sampleParametersMD`/`sampleDynamicsMD`/`sampleStatesMD`) that cannot batch without
+changing RNG order; `pagechol`/inverse batching does not pay off at these small sizes.
+Read-only reductions (`motor_output`/`state_moments`/`selectContextStateMean`) and
+`binomialSample` left as-is (not hotspots / would change RNG draw count) — **DEFERRED**.
+
+**Latent correctness (§2) + tooling (§8) — done:** `mustMarginalize` now **enforces**
+(throws) and was **re-wired into `mixtureDensityOnGrid`** — the Batch-1 density dedup had
+silently dropped it and `mustBeCovarianceMatrix`; both restored. Public methods **renamed**
+to `predicted_context_probabilities_vector`/`_map` and `responsibilities_vector`/`_map` with
+one-time deprecation **shims** for the old names; callers/tests/examples/class-doc updated.
+`run_validation` **Strict** metric-loss fixed; `validate_context_recovery` now
+**seed-averaged**; `CODE_REVIEW.md` context-summary table corrected.
+
+**Data layout (§7) — Class A, done:** scalar `dynamics_ss_1`/`dynamics_ss_2` reoriented to
+feature-leading/particle-trailing (`2×Cmax×P` / `2×2×Cmax×P`), matching the MD accumulators.
+
+**Examples (§9) — done:** `md_examples` `Cwidth` cross-section carryover fixed; the
+setup / `normalize-then-trapz` idioms kept inline (extracting them would hide the
+integration step the demos teach). `startup.m` missing-dependency warning added (§10).
+
+---
+
+The remainder of this file is the **original deferred catalogue** (from the safe-pass quality
+batch), retained for provenance and `file:line` detail. Everything here has now been
+addressed on `experimental` per the changelog above.
 
 > Scope reminder: the batch only made changes that provably do not alter numeric results
 > or RNG-call order (docs, validation guards, dead-code removal, de-dup of non-inference
