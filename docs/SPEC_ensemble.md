@@ -165,13 +165,12 @@ run, the result is `NaN`. (This mirrors `COIN.weighted_sum_along_dimension`'s
 With `runs == 1`, every ensemble query must equal the query of its single member
 (the ensemble is a transparent, seeded wrapper).
 
-### 5.6 Out of scope for Phase 1 (must NOT be relied upon)
+### 5.6 Context-indexed readouts → Phase 2 (see Part 10)
 Context-indexed readouts (responsibilities, predicted-context probabilities,
-per-context state/feedback densities, transition/cue probabilities) are **not**
-provided by the ensemble in Phase 1: averaging them requires a cross-run context
-relabelling (COIN.m `find_optimal_context_labels`) deferred to Phase 2. If present
-as stubs they must error or return documented placeholders; do not test their
-numerical values.
+per-context state/feedback densities, stationary probabilities) require a cross-run
+context relabelling (COIN.m `find_optimal_context_labels`). These are specified in
+**Part 10 (Phase 2)**. The transition/cue probability *matrices* remain out of scope
+(single-model only) for now.
 
 ---
 
@@ -258,3 +257,103 @@ inputs. A snapshot is serialisable (safe to pass to/from `parfor` workers).
 7. `runs == 1` ⇒ ensemble ≡ its single member.
 8. `snapshot`/`loadSnapshot` round-trip preserves all query outputs.
 9. The ensemble leaves the caller's global RNG stream unchanged.
+
+---
+
+## Part 10 — Phase 2: cross-run context alignment
+
+Context-indexed readouts cannot be averaged slot-by-slot: each member labels its
+contexts with an arbitrary, member-local global frame (see
+`RealTimeCOIN/context_alignment`). Phase 2 adds a cross-run alignment that maps
+every member's contexts onto one common **reference frame**, then averages. This is
+the real-time analogue of COIN.m's `find_optimal_context_labels` + `integrate_over_runs`.
+
+### 10.1 Single-member frame recap (given, not to be re-derived)
+For a single `RealTimeCOIN` member, per SPEC of that class:
+- Context probability vectors (`responsibilities_vector`,
+  `predicted_context_probabilities_vector`, `sampled_context_count`) are
+  `1×(max_contexts+1)` rows that **sum to 1**. If the member has `K` instantiated
+  contexts, real mass sits in slots `1..K`, the **novel-context** mass sits in slot
+  `K+1`, and slots `K+2..max_contexts+1` are zero.
+- `stationary_context_probabilities` is a `1×K` row over the instantiated contexts
+  (no novel entry), summing to 1 (or `[]` when `K==0`).
+- `state_given_context_probability(values)` /
+  `state_feedback_given_context_probability(values)` return a `containers.Map`
+  keyed by global context label `1..K`, each value a `1×size(values,2)` density row.
+- `context_alignment(member)` exposes `.K` and `.global_contexts` prototypes; for the
+  scalar model `.global_contexts.state_mean` is `1×K`, for MD it is `N×K`.
+
+### 10.2 The reference frame and the cross-run matching (normative)
+Let `K_r` be member r's context count and `Kref = max_r K_r` (ties → lowest member
+index); the member attaining `Kref` is the **reference member**, and its contexts
+`1..Kref` define the reference labels. For every member r, compute a matching
+`π_r` from member r's contexts `1..K_r` to distinct reference labels `1..Kref` that
+**minimises total prototype distance**, where the distance between member-r context
+`i` and reference context `j` is the Euclidean distance between their prototype state
+means `‖ global_contexts_r.state_mean(:,i) − global_contexts_ref.state_mean(:,j) ‖`
+(scalar model: `|·|`). Solve as a linear assignment (Hungarian / `matchpairs`);
+since `K_r ≤ Kref` all of member r's contexts are matched and `Kref − K_r`
+reference labels are left unmatched for member r. The reference member matches itself
+by the identity. The **novel** context of every member always maps to the reference
+novel slot (`Kref+1`). The alignment is a deterministic function of the members'
+current states (no randomness), so it inherits reproducibility and executor
+invariance.
+
+### 10.3 Averaging rules in the reference frame
+Two distinct rules, by quantity type:
+
+- **Probability vectors** (`responsibilities_vector`,
+  `predicted_context_probabilities_vector`, `sampled_context_count`,
+  `stationary_context_probabilities`): a run that lacks reference context `j`
+  contributes **0** to slot `j` (its posterior on that specific context is ~0; its
+  mass lives in novel / other contexts). So the reference-frame value of slot `j` is
+  `(1/R) Σ_r [ member r's value for the context matched to j, or 0 if unmatched ]`,
+  with each member's novel value added into the novel slot. Because each member's
+  vector sums to 1, the aligned average **sums to 1** exactly (probability is
+  conserved). Zero-fill, divide by R — **not** NaN-omit.
+
+- **Per-context densities** (`state_given_context_probability`,
+  `state_feedback_given_context_probability`): a run that lacks reference context `j`
+  has **no** density for `j` (undefined, not zero). So the reference-frame density of
+  context `j` is the **NaN-omit mean** over the runs that *do* have a context matched
+  to `j` (average over contributing runs only; if no run has `j`, `j` is absent from
+  the output Map).
+
+### 10.4 New ensemble methods
+Shapes mirror the single-member methods, but in the reference frame:
+
+- `p = responsibilities_vector(ens)` → `1×(max_contexts+1)`, sums to 1 (real in
+  `1..Kref`, novel in slot `Kref+1`, rest 0).
+- `p = predicted_context_probabilities_vector(ens)` → as above.
+- `n = sampled_context_count(ens)` → as above.
+- `p = stationary_context_probabilities(ens)` → `1×Kref` over reference contexts,
+  sums to 1 (or `[]` when `Kref==0`); zero-filled + renormalised across runs.
+- `m = state_given_context_probability(ens, values)` → `containers.Map` keyed by
+  reference label `1..Kref`, each value the NaN-omit mean density (§10.3).
+- `m = state_feedback_given_context_probability(ens, values)` → as above.
+
+`values` shape rules and the `state_dim==1` vs `>1` behaviour are exactly the
+single-member ones. These are read-only (no randomness), so §3.5 (global stream
+untouched) still holds.
+
+### 10.5 Testable guarantees (Phase 2)
+These hold **without** re-implementing the aligner and are the recommended oracles:
+1. **`runs == 1` reduction:** every Phase-2 query equals its single member's query
+   exactly (`Kref = K_1`, identity matching; density Map keys and values identical;
+   vectors identical including novel-slot placement).
+2. **Probability conservation:** `responsibilities_vector`,
+   `predicted_context_probabilities_vector`, `sampled_context_count`, and
+   `stationary_context_probabilities` each sum to 1 (within a few eps) whenever the
+   members hold ≥1 context.
+3. **Member-permutation invariance:** the result is invariant to the order in which
+   members are stored/averaged (equal weights).
+4. **Reproducibility & executor invariance:** same `(seed, runs)` ⇒ bit-identical
+   Phase-2 outputs; `max_cores` and `segment_length` do not change them.
+5. **Trivial-alignment regime:** in a single-context (or well-separated,
+   consistently-labelled) scenario where all members share the same frame, the
+   aligned average equals the naive slot-by-slot / key-by-key average of the member
+   queries.
+6. **Density normalisation:** each per-context density integrates to ≈1 over a
+   sufficiently wide, fine grid (same property the single-member densities satisfy).
+7. **Shape/key correctness:** vector lengths `max_contexts+1`; density Map keys are a
+   subset of `1..Kref` with `1×size(values,2)` rows.
