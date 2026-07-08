@@ -26,21 +26,23 @@ function sampleDynamicsMD(obj)
 %
 %SAMPLEDYNAMICSMD Sample Theta = [A | d] from the matrix-normal posterior.
 
-    Cmax = obj.max_contexts + 1;
+    Cmax = obj.max_contexts + 1;                % context slots incl. novel context
     P = obj.num_particles;
 
-    [M0, V0inv, ~] = obj.dynamicsPriorMD();
-    Q = obj.processNoiseCov();
+    [M0, V0inv, ~] = obj.dynamicsPriorMD();     % prior mean and column precision
+    Q = obj.processNoiseCov();                  % process-noise (row) covariance U
 
     for p = 1:P
         for c = 1:Cmax
-            Lxx = obj.D.Lambda_xx(:, :, c, p);
-            Lyx = obj.D.Lambda_yx(:, :, c, p);
+            Lxx = obj.D.Lambda_xx(:, :, c, p);  % sum_i x_{i-1} x_{i-1}'
+            Lyx = obj.D.Lambda_yx(:, :, c, p);  % sum_i s_i x_{i-1}'
 
             Vpost = obj.safeInverse(V0inv + Lxx);
-            Vpost = (Vpost + Vpost') ./ 2;
+            Vpost = (Vpost + Vpost') ./ 2;       % re-symmetrize against round-off
             Mpost = (M0 * V0inv + Lyx) * Vpost;
 
+            % Draw Theta from MN(Mpost, Q, Vpost), rejecting until spectral
+            % radius of A < 1 so the sampled dynamics are stable.
             obj.D.Theta(:, :, c, p) = obj.sampleStableTheta(Mpost, Q, Vpost);
         end
     end
