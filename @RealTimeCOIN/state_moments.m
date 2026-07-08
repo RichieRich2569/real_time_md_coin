@@ -9,6 +9,12 @@ function [mu, v] = state_moments(obj)
 %   per-context Gaussian mixture moments
 %       E[s]   = sum_k w_k m_k
 %       Cov[s] = sum_k w_k (V_k + m_k m_k') - E[s] E[s]'.
+%
+%   This is a read-only query: it draws no random numbers and does not mutate
+%   particle state.
+    arguments
+        obj (1, 1) RealTimeCOIN
+    end
 
     W = obj.D.predicted_probabilities;
 
@@ -19,6 +25,9 @@ function [mu, v] = state_moments(obj)
         return;
     end
 
+    % Multi-dimensional Gaussian-mixture moments. Kept as an explicit nested
+    % loop (rather than vectorised) so the accumulation order is preserved
+    % exactly; see "Deferred optimizations" in the quality review.
     N = obj.state_dim;
     Cmax = obj.max_contexts + 1;
     P = obj.num_particles;

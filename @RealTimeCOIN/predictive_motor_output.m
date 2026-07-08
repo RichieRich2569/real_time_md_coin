@@ -1,11 +1,20 @@
 function u = predictive_motor_output(obj, q)
 %PREDICTIVE_MOTOR_OUTPUT Expected next observation given the upcoming cue.
-%   Scalar for state_dim == 1; an N-by-1 vector for the multi-dimensional
-%   model (the mean of predictive_feedback_moments).
+%   u = predictive_motor_output(obj, q) returns the model's point prediction
+%   of the next state feedback, conditioned on the upcoming cue label q. It is
+%   a read-only one-step prediction from the current posterior (it draws no
+%   random numbers and does not mutate particle state), so it may be called
+%   between observe_q(q) and observe_y(y).
+%
+%   If q is omitted (or []) the pending cue staged by observe_q is used. For
+%   the scalar model (state_dim == 1) u is a scalar; for the multi-dimensional
+%   model u is an N-by-1 vector (the mean returned by
+%   predictive_feedback_moments).
     arguments
         obj (1, 1) RealTimeCOIN
-        q double {mustBeScalarOrEmpty, mustBeInteger, mustBeNonnegative} = [];
+        q double {mustBeScalarOrEmpty, mustBeInteger, mustBeNonnegative} = []
     end
+
     if isempty(q)
         q = obj.pending_q;
     end
@@ -19,6 +28,10 @@ function u = predictive_motor_output(obj, q)
 end
 
 function mustBeScalarOrEmpty(x)
+%MUSTBESCALAROREMPTY Local validator: accept only a scalar or empty cue.
+%   Retained as a local copy (rather than the R2020b+ builtin of the same
+%   name) so the class validates identically on older MATLAB releases and
+%   emits the class-specific error identifier below.
     if ~(isempty(x) || isscalar(x))
         error('RealTimeCOIN:InvalidCue', ...
             'q must be empty or a scalar cue label.');
