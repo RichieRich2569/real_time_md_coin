@@ -20,16 +20,20 @@ function sampleBiasMD(obj)
         return;
     end
 
-    priorPrec = obj.prior_precision_bias * eye(N);
-    priorTerm = obj.prior_precision_bias * obj.prior_mean_bias * ones(N, 1);
+    priorPrec = obj.prior_precision_bias * eye(N);                       % isotropic prior precision
+    priorTerm = obj.prior_precision_bias * obj.prior_mean_bias * ones(N, 1);  % prior contribution to info
 
+    % One conjugate Gaussian draw per (context, particle). Each iteration
+    % forms its own posterior covariance and Cholesky factor; see the deferred
+    % note in sampleParametersMD callers about batching these factorizations.
     for p = 1:P
         for c = 1:Cmax
-            postPrec = priorPrec + obj.D.bias_precision_ss(:, :, c, p);
+            postPrec = priorPrec + obj.D.bias_precision_ss(:, :, c, p);  % prior + observed precision
             postCov = obj.safeInverse(postPrec);
-            postCov = (postCov + postCov') ./ 2;
+            postCov = (postCov + postCov') ./ 2;                         % re-symmetrize against round-off
             postMean = postCov * (priorTerm + obj.D.bias_info_ss(:, c, p));
 
+            % Draw b = postMean + L*z, z ~ N(0, I), with L*L' = postCov.
             [L, ~] = obj.choljitter(postCov);
             obj.D.bias(:, c, p) = postMean + L * randn(N, 1);
         end
