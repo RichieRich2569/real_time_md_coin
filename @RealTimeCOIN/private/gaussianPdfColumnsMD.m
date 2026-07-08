@@ -23,6 +23,6 @@ function d = gaussianPdfColumnsMD(obj, X, m, S)
     mahalanobis = sum(foo.^2, 1);          % 1-by-K
     logPdf = -0.5 * (N * log(2*pi) + logDetS + mahalanobis);
     d = exp(logPdf);
-    d(~isfinite(d)) = realmax;
+    d(~isfinite(d)) = realmax;   % sentinel: largest finite double for overflow
     d = reshape(d, 1, K);
 end
