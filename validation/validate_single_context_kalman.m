@@ -51,19 +51,13 @@ for t = 1:cfg.Trials
     y = s + sigmaR * randn;
     yTrace(t) = y;
 
-    mPred = a * m + d;
-    PPred = a^2 * P + sigmaQ^2;
-    yVar = PPred + sigmaR^2;
+    [mPred, yVar, m, P] = validation_kalman_reference(m, P, a, d, sigmaQ^2, sigmaR^2, y);
 
     kalmanMean(t) = mPred;
     kalmanVar(t) = yVar;
     [rtMean(t), rtVar(t)] = validation_predictive_feedback_moments(coin, 1);
     rtPit(t) = coin.predictive_state_feedback_cdf(y, 1);
     analyticPit(t) = RealTimeCOIN.normal_cdf(y, mPred, yVar);
-
-    K = PPred / yVar;
-    m = mPred + K * (y - mPred);
-    P = (1 - K) * PPred;
 
     coin.observe_q(1);
     coin.observe_y(y);
@@ -74,6 +68,13 @@ varRelError = median(abs(rtVar - kalmanVar) ./ max(kalmanVar, eps));
 feedbackKs = validation_uniform_ks(rtPit);
 analyticKs = validation_uniform_ks(analyticPit);
 
+% Gates are shared verbatim with validate_multidim_kalman so the scalar and
+% multivariate Kalman references are held to one standard.  mean_rmse (0.05)
+% and variance_relative_error (0.35) bound agreement with the analytic
+% Kalman moments; feedback_ks (0.15) is a single-stream PIT gate and is
+% looser than the p_values_extended feedback gate (0.08) because that
+% validator pools many datasets and so estimates the KS statistic far more
+% tightly.
 thresholds = struct();
 thresholds.mean_rmse = 0.05;
 thresholds.variance_relative_error = 0.35;

@@ -15,6 +15,15 @@ elapsed = zeros(size(particles));
 cues = 1 + double(rand(1, cfg.Trials) > 0.5);
 y = 0.3 * sin((1:cfg.Trials) ./ 20) + 0.05 * randn(1, cfg.Trials);
 
+% Warm-up run (untimed): absorbs first-call JIT compilation and one-off
+% allocation costs so they are not charged to the first timed grid point.
+warmTrials = min(cfg.Trials, 10);
+warm = RealTimeCOIN('num_particles', particles(1), 'max_contexts', 5);
+for t = 1:warmTrials
+    warm.observe_q(cues(t));
+    warm.observe_y(y(t));
+end
+
 for i = 1:numel(particles)
     coin = RealTimeCOIN('num_particles', particles(i), 'max_contexts', 5);
     tic;

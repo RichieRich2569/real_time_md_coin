@@ -26,6 +26,11 @@ for i = 1:numel(seeds)
     corrValue(i) = one.correlation_motor_output;
 end
 
+% Gate rationale: mean_rmse (0.03) is tighter than the Kalman validators'
+% RMSE gate (0.05) because this is a direct implementation-vs-implementation
+% comparison against the reference COIN.m on an identical feedback stream,
+% where near-exact agreement is expected, rather than a comparison against
+% analytic moments with particle-filter Monte Carlo error.
 thresholds = struct();
 thresholds.mean_rmse = 0.03;
 thresholds.worst_correlation = 0.95;
