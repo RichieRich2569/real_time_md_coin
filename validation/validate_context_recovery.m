@@ -68,6 +68,13 @@ end
 switches = find(diff(trueContext) ~= 0) + 1;
 lags = recovery_lags(mapped, trueContext, switches);
 
+% Gate rationale: these are qualitative recovery gates, not calibration
+% gates, so they are intentionally generous.  context_accuracy (0.65) is the
+% best-relabelled hard-assignment agreement; posterior_true_context (0.45)
+% is the softer average posterior mass on the true context; and
+% mean_recovery_lag (<=20 trials) bounds how quickly the filter re-locks
+% after a context switch.  These can be seed-sensitive near the boundary;
+% widen the margin or average over a seed loop for publication runs.
 thresholds = struct();
 thresholds.context_accuracy = 0.65;
 thresholds.posterior_true_context = 0.45;

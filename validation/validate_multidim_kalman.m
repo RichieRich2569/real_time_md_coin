@@ -65,9 +65,7 @@ for t = 1:cfg.Trials
     s = A * s + d + Lq * randn(N, 1);
     y = s + Lr * randn(N, 1);
 
-    mPred = A * m + d;
-    PPred = A * Pcov * A' + Q;
-    S = PPred + R;
+    [mPred, S, m, Pcov] = validation_kalman_reference(m, Pcov, A, d, Q, R, y);
     kalmanMean(:, t) = mPred;
 
     coin.observe_q(1);
@@ -79,11 +77,6 @@ for t = 1:cfg.Trials
     mahalanobis = innovation' * (Sigma \ innovation);
     rtPit(t) = gammainc(mahalanobis / 2, N / 2);   % chi-square_N CDF
 
-    K = PPred / S;
-    m = mPred + K * (y - mPred);
-    Pcov = (eye(N) - K) * PPred;
-    Pcov = (Pcov + Pcov') ./ 2;
-
     coin.observe_y(y);
 end
 
@@ -91,6 +84,9 @@ meanRmse = sqrt(mean((rtMean(:) - kalmanMean(:)).^2));
 varRelError = median(varRel);
 feedbackKs = validation_uniform_ks(rtPit);
 
+% Gates match validate_single_context_kalman exactly (see that file for the
+% rationale): mean_rmse 0.05, variance_relative_error 0.35, single-stream
+% feedback_ks 0.15.
 thresholds = struct();
 thresholds.mean_rmse = 0.05;
 thresholds.variance_relative_error = 0.35;

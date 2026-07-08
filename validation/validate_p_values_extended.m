@@ -79,6 +79,12 @@ stateRank = stateRank(1:cursor);
 retentionRank = retentionRank(1:cursor);
 driftRank = driftRank(1:cursor);
 
+% Gate rationale: feedback_ks and cue_ks (both 0.08) are tighter than the
+% Kalman validators' single-stream feedback gate (0.15) because this
+% validator pools NumDatasets*Trials PIT values, sharply reducing the
+% sampling variance of the KS statistic.  state_rank_ks (0.15) is looser
+% because the mixture-CDF rank uses the filtered posterior, a noisier
+% diagnostic than the predictive feedback PIT.
 thresholds = struct();
 thresholds.feedback_ks = 0.08;
 thresholds.cue_ks = 0.08;
