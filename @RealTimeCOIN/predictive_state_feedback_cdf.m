@@ -44,10 +44,3 @@ function p = predictive_state_feedback_cdf(obj, y, q)
     end
     p = min(max(p, 0), 1);
 end
-
-function mustBeScalarOrEmpty(x)
-    if ~(isempty(x) || isscalar(x))
-        error('RealTimeCOIN:InvalidCue', ...
-            'q must be empty or a scalar cue label.');
-    end
-end
