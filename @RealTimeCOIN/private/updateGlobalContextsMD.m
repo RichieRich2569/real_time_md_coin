@@ -36,6 +36,7 @@ function prototypes = updateGlobalContextsMD(obj, Km, modalIdx, weights, assignm
 
         for idx = 1:numel(modalIdx)
             p = modalIdx(idx);
+            % Local context (if any) that particle p maps to this global label.
             local = find(assignment(1:Km, p) == globalIdx, 1);
             if isempty(local)
                 continue;
@@ -43,6 +44,7 @@ function prototypes = updateGlobalContextsMD(obj, Km, modalIdx, weights, assignm
             w = weights(idx);
             totalWeight = totalWeight + w;
 
+            % Accumulate weighted state moments (mean vector, second moment).
             m = obj.D.state_filtered_mean(:, local, p);
             V = obj.D.state_filtered_cov(:, :, local, p);
             stateMean = stateMean + w .* m;

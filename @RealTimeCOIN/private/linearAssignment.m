@@ -1,8 +1,16 @@
 function assignment = linearAssignment(cost)
 %LINEARASSIGNMENT Minimum-cost one-to-one assignment for a square matrix.
+%   assignment = linearAssignment(cost) solves the linear assignment problem for
+%   the n-by-n cost matrix `cost`, returning a 1-by-n row vector that maps each
+%   source row to a distinct target column so the total cost is minimised.
 %
-%   Pure-MATLAB Hungarian/shortest augmenting path implementation. The
-%   returned row vector maps each source row to a target column.
+%   Pure-MATLAB implementation of the Jonker-Volgenant / Hungarian shortest-
+%   augmenting-path method (o(n^3)); no toolbox dependency. Used to relabel a
+%   particle's local contexts onto the global frame during context alignment.
+%
+%   Non-finite / oversized costs are replaced by a large sentinel so infeasible
+%   pairings are effectively forbidden while the solver still runs. An empty
+%   matrix yields an empty assignment; a non-square matrix raises an error.
 
     C = double(cost);
     n = size(C, 1);
@@ -15,19 +23,29 @@ function assignment = linearAssignment(cost)
             'Assignment cost matrix must be square.');
     end
 
+    % large: finite sentinel standing in for +Inf / forbidden pairings, chosen
+    % well above any real cost so such pairs are avoided yet keep the arithmetic
+    % finite (Inf would poison the dual-variable updates below).
     large = 1e100;
     C(~isfinite(C)) = large;
     C(C > large) = large;
+    % Shift so the minimum entry is 0 (assignment is invariant to a constant
+    % offset); improves numerical conditioning of the potentials.
     offset = min(C(:));
     if isfinite(offset)
         C = C - offset;
     end
 
+    % Dual potentials (u, v), column->row matching (p) and augmenting-path
+    % back-pointers (way). Column index 1 is a virtual "unmatched" sentinel, so
+    % real columns occupy indices 2..n+1.
     u = zeros(n, 1);
     v = zeros(n + 1, 1);
     p = zeros(n + 1, 1);
     way = zeros(n + 1, 1);
 
+    % Add rows one at a time, each time growing the matching along a shortest
+    % augmenting path in the reduced-cost graph.
     for i = 1:n
         p(1) = i;
         j0 = 1;
@@ -79,6 +97,7 @@ function assignment = linearAssignment(cost)
         end
     end
 
+    % Read the row->column matching out of the column->row map p.
     assignment = zeros(1, n);
     for j = 2:(n + 1)
         if p(j) > 0
@@ -86,6 +105,8 @@ function assignment = linearAssignment(cost)
         end
     end
 
+    % Safety net: assign any row left unmatched (possible only under degenerate
+    % all-sentinel costs) to the remaining free columns, preserving order.
     missing = assignment == 0;
     if any(missing)
         unused = setdiff(1:n, assignment(~missing), 'stable');
