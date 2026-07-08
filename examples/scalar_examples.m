@@ -390,6 +390,108 @@ for c = 1:D.C
     fprintf('  ctx %d: retention %.3f  drift % .4f  bias % .3f  state_mean % .3f\n', ...
         c, D.retention(c), D.drift(c), D.bias(c), D.state_mean(c));
 end
+%%
+%[text] ## Section 10 - Parallel runs: probability averaging across an ensemble
+%[text] `RealTimeCOINEnsemble` runs R independent `RealTimeCOIN` filters on the **same** feedback stream and returns their equal-weight average. Each run draws from its own reproducible RNG substream (seeded from `seed`), so the runs are independent yet the whole ensemble is deterministic given `seed`. A single run is a noisy Monte-Carlo estimate of the model's expected output; averaging R runs cuts that estimation noise by roughly a factor of sqrt(R). Below, six individual runs (thin) scatter around the 30-run ensemble average (bold).
+rng(10);
+perturb = [zeros(1, 10), 0.4 * ones(1, 25), -0.3 * ones(1, 25), zeros(1, 15)];
+T = numel(perturb);
+fb = perturb + 0.03 * randn(1, T);                    % one feedback stream, shared by all runs
+nShow = 6; np = 40;
+
+indiv = zeros(nShow, T);                               % individual single-run trajectories
+for s = 1:nShow
+    m = RealTimeCOINEnsemble('runs', 1, 'seed', s, 'num_particles', np);
+    for t = 1:T, m.observe_y(fb(t)); indiv(s, t) = m.motor_output(); end
+end
+ens = RealTimeCOINEnsemble('runs', 30, 'seed', 101, 'num_particles', np);
+moEns = zeros(1, T);
+for t = 1:T, ens.observe_y(fb(t)); moEns(t) = ens.motor_output(); end
+
+cols = coinviz.palette(3);
+figure('Name', 'Ensemble: probability averaging across runs');
+hold on;
+hP = plot(1:T, perturb, 'k--', 'LineWidth', 1.2);
+hI = plot(1:T, indiv', '-', 'Color', [cols(2, :), 0.35], 'LineWidth', 0.8);
+hE = plot(1:T, moEns, '-', 'Color', cols(1, :), 'LineWidth', 2.0);
+xlabel('Trial'); ylabel('motor\_output');
+legend([hP, hI(1), hE], {'perturbation', 'individual runs', '30-run ensemble average'}, ...
+    'Location', 'best');
+title('Six single runs (thin) vs the 30-run ensemble average (bold)');
+acrossRunStd = mean(std(indiv, 0, 1));
+fprintf('Mean across-run std of a single run = %.4f;  ~30-run estimator SE = %.4f (that / sqrt(30))\n', ...
+    acrossRunStd, acrossRunStd / sqrt(30));
+
+% Reproducibility: same seed => bit-identical ensemble.
+ensA = RealTimeCOINEnsemble('runs', 8, 'seed', 99, 'num_particles', 80);
+ensB = RealTimeCOINEnsemble('runs', 8, 'seed', 99, 'num_particles', 80);
+for t = 1:T, ensA.observe_y(fb(t)); ensB.observe_y(fb(t)); end
+fprintf('Reproducibility (same seed): max|motor diff| = %.2e;  weights sum = %.3f;  Trial = %d\n', ...
+    abs(ensA.motor_output() - ensB.motor_output()), sum(ens.weights), ens.Trial);
+%%
+%[text] ## Section 11 - Batch replay across runs with `parfor`
+%[text] When the whole observation sequence is known in advance, `simulate(qSeq, ySeq)` replays every run in a single call and returns per-trial run-averaged traces: `motor_output`, the pooled `state_mean`, and the pooled predictive `state_var`. With `max_cores > 0` the runs are dispatched across workers with `parfor`; the result is **bit-identical** to the serial path (and to trial-by-trial stepping). The shaded band is +/- one pooled predictive standard deviation.
+rng(11);
+perturb = [zeros(1, 20), 0.5 * ones(1, 40), -0.4 * ones(1, 40), zeros(1, 20)];
+cues = ones(1, numel(perturb));
+obs  = perturb + 0.03 * randn(size(perturb));
+T = numel(perturb);
+
+ensSerial = RealTimeCOINEnsemble('runs', 50, 'seed', 7, 'max_cores', 0, 'num_particles', 100);
+ensPar    = RealTimeCOINEnsemble('runs', 50, 'seed', 7, 'max_cores', 8, 'num_particles', 100);
+tic; trS = ensSerial.simulate(cues, obs); tSer = toc;
+tic; trP = ensPar.simulate(cues, obs);    tPar = toc;   % parfor across runs (first call also starts the pool)
+fprintf('simulate 50 runs: serial %.2fs, parallel %.2fs\n', tSer, tPar);
+fprintf('serial vs parallel: max|motor diff| = %.2e (bit-identical)\n', ...
+    max(abs(trS.motor_output - trP.motor_output)));
+
+mu = trP.motor_output;
+sd = sqrt(max(trP.state_var, 0));
+cols = coinviz.palette(3);
+figure('Name', 'Ensemble: batch simulate across runs (parfor)');
+hold on;
+fill([1:T, T:-1:1], [mu + sd, fliplr(mu - sd)], cols(1, :), 'FaceAlpha', 0.15, 'EdgeColor', 'none');
+plot(1:T, perturb, 'k--', 'LineWidth', 1.2);
+plot(1:T, mu, '-', 'Color', cols(1, :), 'LineWidth', 1.8);
+xlabel('Trial'); ylabel('motor\_output');
+legend({'\pm 1 pooled SD', 'perturbation', 'run-averaged motor\_output'}, 'Location', 'best');
+title('Batch replay of 50 runs with parfor');
+%%
+%[text] ## Section 12 - Ensemble context-aligned summaries
+%[text] Context labels are arbitrary in each run, so before averaging any context-indexed quantity the ensemble matches every run's contexts onto a common reference frame (by prototype similarity). The averaged context-probability vectors still sum to 1, and each per-context state density is averaged over the runs that instantiated that context. An A/B/A cued schedule instantiates two contexts across 30 runs.
+rng(12);
+blockPert = [0.3, -0.3, 0.3];
+blockCue  = [1, 2, 1];
+blockLen  = 25;
+perturb = repelem(blockPert, blockLen);
+cues    = repelem(blockCue, blockLen);
+obs     = perturb + 0.03 * randn(size(perturb));
+T = numel(perturb);
+maxCtx = 5;
+
+ens = RealTimeCOINEnsemble('runs', 30, 'seed', 5, 'max_contexts', maxCtx, 'num_particles', 100);
+prevCtx = zeros(T, maxCtx + 1);
+postCtx = zeros(T, maxCtx + 1);
+for t = 1:T
+    ens.observe_q(cues(t));
+    prevCtx(t, :) = ens.predicted_context_probabilities_vector();   % run-averaged, aligned
+    ens.observe_y(obs(t));
+    postCtx(t, :) = ens.responsibilities_vector();
+end
+coinviz.contextBars(prevCtx, postCtx, 'FigName', 'Ensemble: aligned context probabilities', ...
+    'NovelContext', true, 'PrevTitle', 'Run-averaged predicted (aligned)', ...
+    'PostTitle', 'Run-averaged responsibilities (aligned)');
+
+grid = linspace(-0.8, 0.8, 201);
+coinviz.densityLines(grid, ens.state_given_context_probability(grid), ...
+    'FigName', 'Ensemble: per-context state density', ...
+    'Title', 'Run-averaged state\_given\_context\_probability', 'XLabel', 'State value');
+
+resp = ens.responsibilities_vector();
+piE  = ens.stationary_context_probabilities();
+fprintf('Run-averaged responsibilities : [%s] (sum %.3f)\n', num2str(resp, '%.2f '), sum(resp));
+fprintf('Ensemble stationary context   : [%s] (sum %.3f)\n', num2str(piE, '%.3f '), sum(piE));
+assert(abs(sum(resp) - 1) < 1e-9, 'aligned responsibilities sum to 1');
 
 %[appendix]{"version":"1.0"}
 %---

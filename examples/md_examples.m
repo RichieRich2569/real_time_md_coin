@@ -473,6 +473,53 @@ coinviz.trajectory2D(corrPath, targets, 'FigName', 'MD prior: correlated R', ...
     'Title', 'Anti-correlated observation noise', 'ObservedXY', fb);
 fprintf('Isotropic contexts: %d;  Correlated contexts: %d\n', ...
     isoModel.diagnostics().K, corrModel.diagnostics().K);
+%%
+%[text] ## Section 11 - Parallel runs: the ensemble (multi-dimensional)
+%[text] `RealTimeCOINEnsemble` wraps R independent N-dimensional `RealTimeCOIN` filters fed the same vector-valued feedback and returns their equal-weight average. `simulate` batch-replays every run (with `parfor` when `max_cores > 0`) and returns the per-trial run-averaged `motor_output` (N-by-T) plus the pooled `state_mean` / `state_var`; context-aligned averages (responsibilities, per-context densities) work exactly as in the scalar notebook. Here a 2-D A/B/A recall schedule is run over 30 members.
+rng(21);
+N = 2;
+tgtA = [0.4; -0.3];  tgtB = [-0.35; 0.25];
+blockLen = 30;
+targetsSeq = [repmat(tgtA, 1, blockLen), repmat(tgtB, 1, blockLen), repmat(tgtA, 1, blockLen)];
+cues = [ones(1, blockLen), 2 * ones(1, blockLen), ones(1, blockLen)];
+T = size(targetsSeq, 2);
+obs = targetsSeq + 0.03 * randn(N, T);
+
+% Batch replay across runs (parfor when max_cores > 0), returning averaged traces.
+ens = RealTimeCOINEnsemble('runs', 30, 'seed', 3, 'max_cores', 8, ...
+    'state_dim', N, 'max_contexts', 4, 'num_particles', 100);
+tr = ens.simulate(cues, obs);
+fprintf('Ensemble (MD): runs = %d, motor trace = %s\n', ens.runs, mat2str(size(tr.motor_output)));
+coinviz.trajectory2D(tr.motor_output, [tgtA, tgtB], ...
+    'FigName', 'Ensemble MD: run-averaged trajectory', ...
+    'Title', 'Run-averaged motor\_output (30 runs, parfor)', 'ObservedXY', obs);
+
+% Live stepping to read context-aligned ensemble summaries at the final trial.
+ensLive = RealTimeCOINEnsemble('runs', 30, 'seed', 3, 'state_dim', N, ...
+    'max_contexts', 4, 'num_particles', 100);
+for t = 1:T, ensLive.observe_q(cues(t)); ensLive.observe_y(obs(:, t)); end
+resp = ensLive.responsibilities_vector();
+[muE, covE] = ensLive.state_moments();
+fprintf('Run-averaged responsibilities: [%s] (sum %.3f)\n', num2str(resp, '%.2f '), sum(resp));
+fprintf('Pooled state mean = [% .3f % .3f]\n', muE(1), muE(2));
+fprintf('Pooled state covariance:\n'); disp(covE);
+
+% Per-context 2-D state density (reference frame), averaged across runs.
+gx = linspace(-0.8, 0.8, 61);
+[GX, GY] = meshgrid(gx, gx);
+gridPts = [GX(:)'; GY(:)'];
+dmap = ensLive.state_given_context_probability(gridPts);   % Map: ctx -> 1 x numel(GX)
+ctxKeys = cell2mat(dmap.keys);
+figure('Name', 'Ensemble MD: per-context state density');
+tiledlayout(1, max(numel(ctxKeys), 1), 'TileSpacing', 'compact');
+for i = 1:numel(ctxKeys)
+    nexttile;
+    imagesc(gx, gx, reshape(dmap(ctxKeys(i)), size(GX)));
+    set(gca, 'YDir', 'normal'); axis square; colorbar;
+    title(sprintf('context %d', ctxKeys(i)));
+    xlabel('dim 1'); ylabel('dim 2');
+end
+sgtitle('Run-averaged state\_given\_context\_probability (reference frame)');
 
 %[appendix]{"version":"1.0"}
 %---
