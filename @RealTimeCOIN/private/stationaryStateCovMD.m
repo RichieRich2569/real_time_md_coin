@@ -23,12 +23,10 @@ function P = stationaryStateCovMD(obj, A, Q)
         pvec = K \ qvec;
     end
     P = reshape(pvec, N, N);
-    P = (P + P') ./ 2;
 
-    % Project to the nearest PSD matrix (clip negative eigenvalues) so a new
-    % context is always seeded with a usable covariance.
-    [Vc, Dc] = eig(P);
-    dvals = max(real(diag(Dc)), 0);
-    P = Vc * diag(dvals) * Vc';
-    P = (P + P') ./ 2;
+    % Delegate the symmetrise + PSD-projection (clip negative eigenvalues) to the
+    % shared PD-repair utility; the "eigclip" tactic is a verbatim copy of the
+    % epilogue this function used to inline, so a new context is always seeded
+    % with a usable covariance.
+    P = ensurePD("eigclip", P);
 end
