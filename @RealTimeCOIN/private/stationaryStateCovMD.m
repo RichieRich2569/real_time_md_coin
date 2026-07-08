@@ -15,6 +15,8 @@ function P = stationaryStateCovMD(obj, A, Q)
     N = obj.state_dim;
     K = eye(N^2) - kron(A, A);
     qvec = Q(:);
+    % rcond < 1e-12 flags a near-singular Kronecker system (system at/over the
+    % stability boundary); fall back to the pseudo-inverse for a finite result.
     if rcond(K) < 1e-12
         pvec = pinv(K) * qvec;
     else

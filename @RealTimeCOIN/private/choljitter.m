@@ -19,7 +19,7 @@ function [L, ok] = choljitter(~, S)
     if ~isfinite(scale) || scale <= 0
         scale = 1;
     end
-    jit = 1e-12 * scale;
+    jit = 1e-12 * scale;   % base jitter: 1e-12 relative to the mean diagonal
     for k = 1:8
         [L, flag] = chol(S + jit * eye(size(S)), 'lower');
         if flag == 0

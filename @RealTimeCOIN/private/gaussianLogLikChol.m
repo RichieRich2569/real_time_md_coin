@@ -1,4 +1,10 @@
 function logLik = gaussianLogLikChol(obj, yTilde, S)
+%GAUSSIANLOGLIKCHOL Stable multivariate Gaussian log-likelihood of a residual.
+%   logLik = gaussianLogLikChol(obj, yTilde, S) returns log N(yTilde | 0, S),
+%   the Gaussian log-density of innovation yTilde under innovation covariance S,
+%   evaluated stably via S's Cholesky factor (no explicit inverse). See the
+%   derivation below. At M == 1 it reduces to log(RealTimeCOIN.normal_pdf).
+%
 % =========================================================================
 % MATHEMATICAL PROOF: MULTIVARIATE LIKELIHOOD VIA CHOLESKY FACTORISATION
 % =========================================================================
@@ -20,9 +26,6 @@ function logLik = gaussianLogLikChol(obj, yTilde, S)
 % avoids the numerical hazards of an explicit inverse. At M == 1 it reduces
 % to the scalar log of RealTimeCOIN.normal_pdf used in the scalar pipeline.
 % =========================================================================
-%
-%GAUSSIANLOGLIKCHOL Stable multivariate Gaussian log-likelihood of a residual.
-%   logLik = gaussianLogLikChol(obj, yTilde, S) returns log N(yTilde | 0, S).
 
     M = numel(yTilde);
     yTilde = yTilde(:);

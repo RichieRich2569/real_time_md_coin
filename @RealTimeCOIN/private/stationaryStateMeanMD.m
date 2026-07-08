@@ -10,6 +10,8 @@ function m = stationaryStateMeanMD(obj, A, d)
 
     N = obj.state_dim;
     ImA = eye(N) - A;
+    % rcond < 1e-12 flags a near-singular (I - A) (unit eigenvalue); fall back
+    % to the pseudo-inverse so the mean stays finite instead of Inf/NaN.
     if rcond(ImA) < 1e-12
         m = pinv(ImA) * d(:);
     else
