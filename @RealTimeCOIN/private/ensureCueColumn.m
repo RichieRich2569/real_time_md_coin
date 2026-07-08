@@ -1,4 +1,13 @@
 function ensureCueColumn(obj, q)
+%ENSURECUECOLUMN Grow the cue-indexed particle arrays to hold at least q cues.
+%   ensureCueColumn(obj, q) zero-pads the cue dimension of the sufficient
+%   statistics and cue-probability arrays in obj.D so that cue label q is
+%   addressable:
+%     - D.n_cue                  (Cmax-by-Q-by-P) cue-count sufficient stats,
+%     - D.global_cue_probabilities (Q-by-P) global cue distribution,
+%     - D.local_cue_matrix       (Cmax-by-Q-by-P) per-context cue likelihoods,
+%   where Cmax = max_contexts + 1 and P = num_particles. Existing entries are
+%   preserved; new columns/rows are initialised to 0. No-op for empty q.
     if isempty(q)
         return;
     end
