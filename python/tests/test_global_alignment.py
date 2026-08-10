@@ -5,10 +5,11 @@ Python port needs: that the alignment never mutates the particle state, that the
 map and vector read-outs agree, and that the stationary distribution really is a
 fixed point of the aligned transition matrix.
 
-Everything is driven through ``RealTimeCOIN.from_state`` fixtures - never
-``observe_y`` - so these tests are independent of the inference pipelines.
-Sections of the MATLAB test that genuinely need a pipeline are marked
-``pytest.skip``.
+Almost everything is driven through ``RealTimeCOIN.from_state`` fixtures rather
+than ``observe_y``, so these tests are largely independent of the inference
+pipelines. The one exception is the lazy-cache section at the end, which the
+MATLAB original drives with real observations and which is reproduced that way
+here.
 """
 
 from __future__ import annotations
@@ -1008,16 +1009,31 @@ def test_md_alignment_never_mutates_the_particle_state():
 
 
 # ----------------------------------------------------------------------
-# deferred: needs a working inference pipeline
+# integration: the lazy cache driven by the real inference pipeline
 # ----------------------------------------------------------------------
 
 
 def test_alignment_cache_across_observations():
-    """The MATLAB lazy-cache section drives the cache with real observations."""
-    pytest.skip("integration: requires pipeline (unit E1)")
-    # TODO(E1): port tests/test_global_alignment.m lines 34-41 -
-    #   coin = RealTimeCOIN(num_particles=12, max_contexts=3)
-    #   coin.observe_y(0.1); a1 = coin.context_alignment()
-    #   a2 = coin.context_alignment(); assert same cache_state_version
-    #   coin.observe_y(0.2); a3 = coin.context_alignment()
-    #   assert a3 cache_state_version differs from a1.
+    """The MATLAB lazy-cache section driven with real observations.
+
+    Port of ``tests/test_global_alignment.m`` lines 34-41: repeated
+    ``context_alignment`` calls within a trial reuse one cache entry, and each
+    ``observe_y`` invalidates it.
+    """
+    model = RealTimeCOIN(num_particles=12, max_contexts=3, rng=0)
+    model.observe_y(0.1)
+
+    a1 = model.context_alignment()
+    a2 = model.context_alignment()
+    assert a1["cache_state_version"] == a2["cache_state_version"], (
+        "repeated alignment calls should reuse the cached state version"
+    )
+    # A cache hit hands back the very same object (Python has no value structs).
+    assert a2 is a1
+
+    model.observe_y(0.2)
+    a3 = model.context_alignment()
+    assert a3["cache_state_version"] != a1["cache_state_version"], (
+        "a new observation should invalidate the alignment cache"
+    )
+    assert a3["computed_at_trial"] == model.Trial

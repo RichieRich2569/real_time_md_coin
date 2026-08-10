@@ -14,6 +14,11 @@ Examples
 0
 """
 
+from .ensemble import (
+    EnsembleLockstepError,
+    RealTimeCOINEnsemble,
+    SimulationTraces,
+)
 from .exceptions import (
     BiasNotInferredError,
     ModelFormatError,
@@ -29,6 +34,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     "RealTimeCOIN",
+    "RealTimeCOINEnsemble",
+    "SimulationTraces",
     "ParticleState",
     "RealTimeCOINError",
     "NoCuesError",
@@ -36,11 +43,5 @@ __all__ = [
     "ScalarModelOnlyError",
     "NameValuePairsError",
     "ModelFormatError",
+    "EnsembleLockstepError",
 ]
-
-try:   # Optional: the ensemble wrapper arrives in a later translation unit.
-    from .ensemble import RealTimeCOINEnsemble   # noqa: F401  (re-exported below)
-except ImportError:   # pragma: no cover - module not written yet
-    pass
-else:
-    __all__.append("RealTimeCOINEnsemble")

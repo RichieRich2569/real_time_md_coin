@@ -60,7 +60,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 import viz
-from realtimecoin import RealTimeCOIN
+from realtimecoin import RealTimeCOIN, RealTimeCOINEnsemble
 
 plt.rcParams["figure.max_open_warning"] = 0
 
@@ -616,68 +616,67 @@ for c in range(D["C"]):
 # draws from its own reproducible substream (seeded from `seed`), so the runs
 # are independent yet the whole ensemble is deterministic given `seed`. A single
 # run is a noisy Monte-Carlo estimate of the model's expected output; averaging
-# R runs cuts that estimation noise by roughly a factor of sqrt(R). Below, six
-# individual runs (thin) scatter around the 30-run ensemble average (bold).
+# R runs cuts that estimation noise by roughly a factor of sqrt(R). Below, five
+# individual runs (thin) scatter around the 12-run ensemble average (bold).
+#
+# Run counts here are deliberately modest (12, not the 30-50 an offline study
+# would use) to keep this notebook to a few minutes end to end. Nothing about
+# the behaviour changes with R -- only the Monte-Carlo error, as 1/sqrt(R).
 
 # %%
-try:
-    from realtimecoin import RealTimeCOINEnsemble
-except ImportError:
-    print("RealTimeCOINEnsemble pending (unit D1) - skipping section 10")
-else:
-    data_rng = np.random.default_rng(10)
-    lens = [nt(10, 4), nt(25, 8), nt(25, 8), nt(15, 5)]
-    perturb = np.concatenate([
-        np.zeros(lens[0]), 0.4 * np.ones(lens[1]),
-        -0.3 * np.ones(lens[2]), np.zeros(lens[3]),
-    ])
-    T = perturb.size
-    fb = perturb + 0.03 * data_rng.standard_normal(T)   # one stream, shared by all
-    n_show = 6
-    n_p = npart(40, 10)
+data_rng = np.random.default_rng(10)
+lens = [nt(10, 4), nt(25, 8), nt(25, 8), nt(15, 5)]
+perturb = np.concatenate([
+    np.zeros(lens[0]), 0.4 * np.ones(lens[1]),
+    -0.3 * np.ones(lens[2]), np.zeros(lens[3]),
+])
+T = perturb.size
+fb = perturb + 0.03 * data_rng.standard_normal(T)   # one stream, shared by all
+n_show = 5
+n_p = npart(40, 10)
 
-    indiv = np.zeros((n_show, T))                       # single-run trajectories
-    for s in range(n_show):
-        m = RealTimeCOINEnsemble(runs=1, seed=s + 1, num_particles=n_p)
-        for t in range(T):
-            m.observe_y(fb[t])
-            indiv[s, t] = m.motor_output()
-    ens = RealTimeCOINEnsemble(runs=nruns(30), seed=101, num_particles=n_p)
-    mo_ens = np.zeros(T)
+indiv = np.zeros((n_show, T))                       # single-run trajectories
+for s in range(n_show):
+    m = RealTimeCOINEnsemble(runs=1, seed=s + 1, num_particles=n_p)
     for t in range(T):
-        ens.observe_y(fb[t])
-        mo_ens[t] = ens.motor_output()
+        m.observe_y(fb[t])
+        indiv[s, t] = m.motor_output()
+ens = RealTimeCOINEnsemble(runs=nruns(12), seed=101, num_particles=n_p)
+mo_ens = np.zeros(T)
+for t in range(T):
+    ens.observe_y(fb[t])
+    mo_ens[t] = ens.motor_output()
 
-    cols = viz.palette(3)
-    trials = np.arange(1, T + 1)
-    fig = viz.new_figure("Ensemble: probability averaging across runs")
-    ax = fig.subplots()
-    ax.plot(trials, perturb, "k--", linewidth=1.2, label="perturbation")
-    for s in range(n_show):
-        ax.plot(trials, indiv[s], "-", color=cols[1], alpha=0.35, linewidth=0.8,
-                label="individual runs" if s == 0 else None)
-    ax.plot(trials, mo_ens, "-", color=cols[0], linewidth=2.0,
-            label="%d-run ensemble average" % nruns(30))
-    ax.set_xlabel("Trial")
-    ax.set_ylabel("motor_output")
-    ax.legend(loc="best", fontsize="small")
-    ax.set_title("Six single runs (thin) vs the ensemble average (bold)")
-    fig.tight_layout()
+cols = viz.palette(3)
+trials = np.arange(1, T + 1)
+fig = viz.new_figure("Ensemble: probability averaging across runs")
+ax = fig.subplots()
+ax.plot(trials, perturb, "k--", linewidth=1.2, label="perturbation")
+for s in range(n_show):
+    ax.plot(trials, indiv[s], "-", color=cols[1], alpha=0.35, linewidth=0.8,
+            label="individual runs" if s == 0 else None)
+ax.plot(trials, mo_ens, "-", color=cols[0], linewidth=2.0,
+        label="%d-run ensemble average" % nruns(12))
+ax.set_xlabel("Trial")
+ax.set_ylabel("motor_output")
+ax.legend(loc="best", fontsize="small")
+ax.set_title("Five single runs (thin) vs the ensemble average (bold)")
+fig.tight_layout()
 
-    across_run_std = float(np.mean(np.std(indiv, axis=0, ddof=1)))
-    r = nruns(30)
-    print("Mean across-run std of a single run = %.4f;  ~%d-run estimator SE = "
-          "%.4f (that / sqrt(%d))"
-          % (across_run_std, r, across_run_std / np.sqrt(r), r))
+across_run_std = float(np.mean(np.std(indiv, axis=0, ddof=1)))
+r = nruns(12)
+print("Mean across-run std of a single run = %.4f;  ~%d-run estimator SE = "
+      "%.4f (that / sqrt(%d))"
+      % (across_run_std, r, across_run_std / np.sqrt(r), r))
 
-    # Reproducibility: same seed => bit-identical ensemble.
-    ens_a = RealTimeCOINEnsemble(runs=nruns(8), seed=99, num_particles=npart(80))
-    ens_b = RealTimeCOINEnsemble(runs=nruns(8), seed=99, num_particles=npart(80))
-    for t in range(T):
-        ens_a.observe_y(fb[t])
-        ens_b.observe_y(fb[t])
-    print("Reproducibility (same seed): max|motor diff| = %.2e over %d trials"
-          % (abs(ens_a.motor_output() - ens_b.motor_output()), T))
+# Reproducibility: same seed => bit-identical ensemble.
+ens_a = RealTimeCOINEnsemble(runs=nruns(4), seed=99, num_particles=npart(40))
+ens_b = RealTimeCOINEnsemble(runs=nruns(4), seed=99, num_particles=npart(40))
+for t in range(T):
+    ens_a.observe_y(fb[t])
+    ens_b.observe_y(fb[t])
+print("Reproducibility (same seed): max|motor diff| = %.2e over %d trials"
+      % (abs(ens_a.motor_output() - ens_b.motor_output()), T))
 
 # %% [markdown]
 # ## Section 11 - Batch replay across runs
@@ -685,70 +684,83 @@ else:
 # When the whole observation sequence is known in advance, `simulate(q_seq,
 # y_seq)` replays every run in a single call and returns per-trial run-averaged
 # traces: `motor_output`, the pooled `state_mean`, and the pooled predictive
-# `state_var`. With `max_cores > 0` the runs are dispatched across worker
-# processes; the result is **bit-identical** to the serial path (and to
-# trial-by-trial stepping). The shaded band is +/- one pooled predictive
-# standard deviation.
+# `state_var`. It is **bit-identical** to stepping the ensemble trial by trial,
+# which the cell checks. The shaded band is +/- one pooled predictive standard
+# deviation.
+#
+# `max_cores > 0` dispatches the runs across worker processes, again
+# bit-identically (only throughput changes). This cell keeps `max_cores=0`:
+# on Windows and macOS `multiprocessing` uses the *spawn* start method, so each
+# worker re-imports the module that launched the program - which a cell-mode
+# script or notebook cannot guard with `if __name__ == "__main__":`. In an
+# ordinary script, put the `simulate` call under that guard and set
+# `max_cores` to the worker count you want.
+#
+# Size note: 6 members x 80 trials at 60 particles, not the 50 x 120 x 100 an
+# offline study would use, so the full-size notebook stays within a few
+# minutes (this cell runs the whole schedule TWICE, once batched and once
+# stepped). The averaging behaviour is identical; only the Monte-Carlo error
+# scales, as 1/sqrt(R).
 
 # %%
-try:
-    from realtimecoin import RealTimeCOINEnsemble
-except ImportError:
-    print("RealTimeCOINEnsemble pending (unit D1) - skipping section 11")
-else:
-    import time
+import time
 
-    def trace(traces, name):
-        """Read a named trace out of simulate()'s result.
+def trace(traces, name):
+    """Read a named trace out of simulate()'s result.
 
-        The ensemble may return the traces as a mapping or as a small record
-        object; both are handled so this cell does not care which.
-        """
-        value = traces[name] if hasattr(traces, "keys") else getattr(traces, name)
-        return np.asarray(value, dtype=float)
+    The ensemble may return the traces as a mapping or as a small record
+    object; both are handled so this cell does not care which.
+    """
+    value = traces[name] if hasattr(traces, "keys") else getattr(traces, name)
+    return np.asarray(value, dtype=float)
 
-    data_rng = np.random.default_rng(11)
-    lens = [nt(20, 6), nt(40, 10), nt(40, 10), nt(20, 6)]
-    perturb = np.concatenate([
-        np.zeros(lens[0]), 0.5 * np.ones(lens[1]),
-        -0.4 * np.ones(lens[2]), np.zeros(lens[3]),
-    ])
-    T = perturb.size
-    cues = np.ones(T, dtype=int)
-    obs = perturb + 0.03 * data_rng.standard_normal(T)
+data_rng = np.random.default_rng(11)
+lens = [nt(15, 6), nt(25, 10), nt(25, 10), nt(15, 6)]
+perturb = np.concatenate([
+    np.zeros(lens[0]), 0.5 * np.ones(lens[1]),
+    -0.4 * np.ones(lens[2]), np.zeros(lens[3]),
+])
+T = perturb.size
+cues = np.ones(T, dtype=int)
+obs = perturb + 0.03 * data_rng.standard_normal(T)
 
-    n_runs = nruns(50)
-    ens_serial = RealTimeCOINEnsemble(runs=n_runs, seed=7, max_cores=0,
-                                      num_particles=npart(100))
-    ens_par = RealTimeCOINEnsemble(runs=n_runs, seed=7, max_cores=8,
-                                   num_particles=npart(100))
-    t0 = time.perf_counter()
-    tr_s = ens_serial.simulate(cues, obs)
-    t_ser = time.perf_counter() - t0
-    t0 = time.perf_counter()
-    tr_p = ens_par.simulate(cues, obs)      # first call also starts the workers
-    t_par = time.perf_counter() - t0
-    print("simulate %d runs: serial %.2fs, parallel %.2fs" % (n_runs, t_ser, t_par))
-    print("serial vs parallel: max|motor diff| = %.2e (bit-identical)"
-          % np.max(np.abs(trace(tr_s, "motor_output")
-                          - trace(tr_p, "motor_output"))))
+n_runs = nruns(6)
+ens_batch = RealTimeCOINEnsemble(runs=n_runs, seed=7, max_cores=0,
+                                 num_particles=npart(60))
+t0 = time.perf_counter()
+tr_b = ens_batch.simulate(cues, obs)
+t_batch = time.perf_counter() - t0
 
-    mu = trace(tr_p, "motor_output")
-    sd = np.sqrt(np.maximum(trace(tr_p, "state_var"), 0.0))
-    cols = viz.palette(3)
-    trials = np.arange(1, T + 1)
-    fig = viz.new_figure("Ensemble: batch simulate across runs")
-    ax = fig.subplots()
-    ax.fill_between(trials, mu - sd, mu + sd, color=cols[0], alpha=0.15,
-                    linewidth=0, label="+/- 1 pooled SD")
-    ax.plot(trials, perturb, "k--", linewidth=1.2, label="perturbation")
-    ax.plot(trials, mu, "-", color=cols[0], linewidth=1.8,
-            label="run-averaged motor_output")
-    ax.set_xlabel("Trial")
-    ax.set_ylabel("motor_output")
-    ax.legend(loc="best", fontsize="small")
-    ax.set_title("Batch replay of %d runs" % n_runs)
-    fig.tight_layout()
+# The same ensemble stepped one trial at a time, as the equivalence check.
+ens_step = RealTimeCOINEnsemble(runs=n_runs, seed=7, num_particles=npart(60))
+mo_step = np.zeros(T)
+t0 = time.perf_counter()
+for t in range(T):
+    ens_step.observe_q(cues[t])
+    ens_step.observe_y(obs[t])
+    mo_step[t] = ens_step.motor_output()
+t_step = time.perf_counter() - t0
+print("%d runs x %d trials: simulate %.2fs, stepping loop %.2fs"
+      % (n_runs, T, t_batch, t_step))
+print("simulate vs stepping: max|motor diff| = %.2e (bit-identical)"
+      % np.max(np.abs(trace(tr_b, "motor_output") - mo_step)))
+
+mu = trace(tr_b, "motor_output")
+sd = np.sqrt(np.maximum(trace(tr_b, "state_var"), 0.0))
+cols = viz.palette(3)
+trials = np.arange(1, T + 1)
+fig = viz.new_figure("Ensemble: batch simulate across runs")
+ax = fig.subplots()
+ax.fill_between(trials, mu - sd, mu + sd, color=cols[0], alpha=0.15,
+                linewidth=0, label="+/- 1 pooled SD")
+ax.plot(trials, perturb, "k--", linewidth=1.2, label="perturbation")
+ax.plot(trials, mu, "-", color=cols[0], linewidth=1.8,
+        label="run-averaged motor_output")
+ax.set_xlabel("Trial")
+ax.set_ylabel("motor_output")
+ax.legend(loc="best", fontsize="small")
+ax.set_title("Batch replay of %d runs" % n_runs)
+fig.tight_layout()
 
 # %% [markdown]
 # ## Section 12 - Ensemble context-aligned summaries
@@ -758,74 +770,56 @@ else:
 # common reference frame (by prototype similarity). The averaged
 # context-probability vectors still sum to 1, and each per-context state density
 # is averaged over the runs that instantiated that context. An A/B/A cued
-# schedule instantiates two contexts across 30 runs.
+# schedule instantiates two contexts across 12 runs (kept small for runtime;
+# the alignment does not care how many runs there are).
 #
-# The six context-indexed ensemble queries are Phase 2 of the ensemble work, so
-# they are guarded here: until they land the cell reports "phase 2 pending" and
-# still runs.
+# The reference frame is the member holding the most contexts (ties to the
+# lowest index); every other member's contexts are matched onto it by minimum
+# prototype distance. Probability vectors are ZERO-FILLED before averaging
+# (a run lacking a reference context contributes 0), which is what keeps them
+# summing to 1; per-context densities use a NaN-OMIT mean over the runs that
+# actually hold the context.
 
 # %%
-try:
-    from realtimecoin import RealTimeCOINEnsemble
-except ImportError:
-    print("RealTimeCOINEnsemble pending (unit D1) - skipping section 12")
-else:
-    data_rng = np.random.default_rng(12)
-    block_pert = [0.3, -0.3, 0.3]
-    block_cue = [1, 2, 1]
-    block_len = nt(25, 8)
-    perturb = np.repeat(block_pert, block_len)
-    cues = np.repeat(block_cue, block_len)
-    obs = perturb + 0.03 * data_rng.standard_normal(perturb.shape)
-    T = perturb.size
-    max_ctx = 5
+data_rng = np.random.default_rng(12)
+block_pert = [0.3, -0.3, 0.3]
+block_cue = [1, 2, 1]
+block_len = nt(25, 8)
+perturb = np.repeat(block_pert, block_len)
+cues = np.repeat(block_cue, block_len)
+obs = perturb + 0.03 * data_rng.standard_normal(perturb.shape)
+T = perturb.size
+max_ctx = 5
 
-    ens = RealTimeCOINEnsemble(runs=nruns(30), seed=5, max_contexts=max_ctx,
-                               num_particles=npart(100))
-    prev_ctx = np.zeros((T, max_ctx + 1))
-    post_ctx = np.zeros((T, max_ctx + 1))
-    phase2 = True
-    for t in range(T):
-        ens.observe_q(cues[t])
-        try:
-            prev_ctx[t] = ens.predicted_context_probabilities_vector()
-        except NotImplementedError:
-            phase2 = False
-        ens.observe_y(obs[t])
-        try:
-            post_ctx[t] = ens.responsibilities_vector()
-        except NotImplementedError:
-            phase2 = False
+ens = RealTimeCOINEnsemble(runs=nruns(12), seed=5, max_contexts=max_ctx,
+                           num_particles=npart(60))
+prev_ctx = np.zeros((T, max_ctx + 1))
+post_ctx = np.zeros((T, max_ctx + 1))
+for t in range(T):
+    ens.observe_q(cues[t])
+    prev_ctx[t] = ens.predicted_context_probabilities_vector()
+    ens.observe_y(obs[t])
+    post_ctx[t] = ens.responsibilities_vector()
 
-    if not phase2:
-        # The pooled point estimates are available today; the context-indexed
-        # ones arrive with phase 2 of the ensemble work.
-        print("Ensemble context-aligned summaries are phase 2 pending; "
-              "showing the run-averaged motor output instead.")
-        print("Final run-averaged motor_output = %+.3f" % ens.motor_output())
-    else:
-        viz.context_bars(prev_ctx, post_ctx,
-                         fig_name="Ensemble: aligned context probabilities",
-                         novel_context=True,
-                         prev_title="Run-averaged predicted (aligned)",
-                         post_title="Run-averaged responsibilities (aligned)")
+viz.context_bars(prev_ctx, post_ctx,
+                 fig_name="Ensemble: aligned context probabilities",
+                 novel_context=True,
+                 prev_title="Run-averaged predicted (aligned)",
+                 post_title="Run-averaged responsibilities (aligned)")
 
-        grid = np.linspace(-0.8, 0.8, 201)
-        try:
-            viz.density_lines(
-                grid, ens.state_given_context_probability(grid),
-                fig_name="Ensemble: per-context state density",
-                title="Run-averaged state_given_context_probability",
-                xlabel="State value")
-            resp = ens.responsibilities_vector()
-            pi_e = ens.stationary_context_probabilities()
-            print("Run-averaged responsibilities : [%s] (sum %.3f)"
-                  % (" ".join("%.2f" % v for v in resp), resp.sum()))
-            print("Ensemble stationary context   : [%s] (sum %.3f)"
-                  % (" ".join("%.3f" % v for v in pi_e), pi_e.sum()))
-            assert abs(resp.sum() - 1) < 1e-9, "aligned responsibilities sum to 1"
-        except NotImplementedError:
-            print("Ensemble per-context densities are phase 2 pending.")
+grid = np.linspace(-0.8, 0.8, 201)
+viz.density_lines(
+    grid, ens.state_given_context_probability(grid),
+    fig_name="Ensemble: per-context state density",
+    title="Run-averaged state_given_context_probability",
+    xlabel="State value")
+resp = ens.responsibilities_vector()
+pi_e = ens.stationary_context_probabilities()
+print("Run-averaged responsibilities : [%s] (sum %.3f)"
+      % (" ".join("%.2f" % v for v in resp), resp.sum()))
+print("Ensemble stationary context   : [%s] (sum %.3f)"
+      % (" ".join("%.3f" % v for v in pi_e), pi_e.sum()))
+assert abs(resp.sum() - 1) < 1e-9, "aligned responsibilities sum to 1"
 
 # %% [markdown]
 # ## Wrap-up

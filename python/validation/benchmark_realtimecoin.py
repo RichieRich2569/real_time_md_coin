@@ -1,4 +1,4 @@
-﻿"""Wall-clock benchmark of :class:`realtimecoin.RealTimeCOIN`.
+"""Wall-clock benchmark of :class:`realtimecoin.RealTimeCOIN`.
 
 Translated from ``validation/benchmark_realtimecoin.m``.
 

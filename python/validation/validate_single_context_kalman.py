@@ -22,24 +22,26 @@ validation code:
 * predictive moments  <- ``validation_predictive_feedback_moments.m`` (validation)
 * PIT                 <- ``coin.predictive_state_feedback_cdf``        (production)
 
-``predictive_state_feedback_cdf`` is not yet implemented in this Python
-worktree, so the two roles are SWAPPED here - the structure is preserved, only
-the assignment changes:
+This port keeps that two-implementation design but SWAPS which side supplies
+which quantity:
 
 * predictive moments  <- ``model.predictive_feedback_moments`` (production)
 * PIT                 <- :func:`validation.feedback_moments.predictive_feedback_mixture`
   plus :func:`validation.mixture_utils.mixture_cdf`           (validation)
 
-Both implementations are therefore still exercised, and the RMSE gate now
-measures PRODUCTION moments against the analytic Kalman filter (a slightly
-stronger claim than MATLAB's). The reported
-``moment_cross_check_max_abs_diff`` makes the agreement between the two paths
-explicit: it is the largest per-trial discrepancy between the production
-moments and the validation mirror's, and should sit at round-off.
+The swap is a deliberate INDEPENDENT MIRROR, not a workaround for a missing
+query: ``RealTimeCOIN.predictive_state_feedback_cdf`` exists and is exercised by
+``validate_p_values`` / ``validate_p_values_extended``, so gating on it here
+would re-test it rather than add coverage. In this orientation the RMSE gate
+measures PRODUCTION moments against the analytic Kalman filter - a slightly
+stronger claim than MATLAB's - while the mirror supplies the PIT.
 
-Once ``predictive_state_feedback_cdf`` lands, ``rt_pit`` can be switched back to
-``model.predictive_state_feedback_cdf(y, 1)`` to match MATLAB exactly; the
-mirror would then become a third, redundant check.
+Both implementations are therefore still exercised, and the reported
+``moment_cross_check_max_abs_diff`` makes their agreement explicit: it is the
+largest per-trial discrepancy between the production moments and the validation
+mirror's, and should sit at round-off. Swapping back to
+``model.predictive_state_feedback_cdf(y, 1)`` would reproduce MATLAB's exact
+assignment and turn the mirror into a redundant third check.
 
 Run as a script for a MATLAB-style console summary::
 
@@ -58,6 +60,7 @@ from realtimecoin.statics import normal_cdf
 from .feedback_moments import predictive_feedback_mixture
 from .kalman_reference import kalman_reference_step
 from .mixture_utils import mixture_cdf, mixture_moments
+from .pass_summary import pass_summary
 from .uniform_ks import uniform_ks
 
 __all__ = ["run", "THRESHOLDS", "DEFAULT_TRIALS", "DEFAULT_PARTICLES"]
@@ -86,38 +89,6 @@ _A = 0.82
 _D = 0.035
 _SIGMA_Q = 0.025
 _SIGMA_R = 0.05
-
-
-def _pass_summary(checks):
-    """Aggregate named checks into one overall pass flag.
-
-    Local stand-in for ``validation_pass_summary.m`` (the shared Python helper
-    belongs to another translation unit). ``None`` marks a check that was
-    SKIPPED and is excluded from the verdict; ``nan`` counts as a failure,
-    because it means the validator produced no interpretable metric.
-
-    Parameters
-    ----------
-    checks : dict
-        ``{name: bool or float or None}``.
-
-    Returns
-    -------
-    passed : bool
-        True when every non-skipped check holds.
-    checks : dict
-        The same mapping, with numeric entries coerced to ``bool``.
-    """
-    out = {}
-    passed = True
-    for name, value in checks.items():
-        if value is None:
-            out[name] = None
-            continue
-        ok = bool(value) and bool(np.isfinite(float(value)))
-        out[name] = ok
-        passed = passed and ok
-    return passed, out
 
 
 def run(seed=0, strict=False, **overrides):
@@ -230,7 +201,7 @@ def run(seed=0, strict=False, **overrides):
     feedback_ks = uniform_ks(rt_pit)
     analytic_ks = uniform_ks(analytic_pit)
 
-    passed, checks = _pass_summary(
+    passed, checks = pass_summary(
         {
             "mean_rmse": mean_rmse < THRESHOLDS["mean_rmse"],
             "variance_relative_error": (

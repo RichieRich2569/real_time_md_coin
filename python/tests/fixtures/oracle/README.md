@@ -179,13 +179,14 @@ stream. Exactly zero is not usable: it makes `COIN.m` degenerate (its motor
 output becomes `NaN` after trial 2), which is why the tiny value is used and
 shared with the ensemble members.
 
-### Pending dependency
+### Availability guard
 
-`RealTimeCOINEnsemble` is delivered by a separate translation unit. Until it
-merges, both validators return
-`{"errored": False, "skipped": True, "passed": True,
-  "skipped_reason": "pending unit D1 merge (...)"}` and their pytest wrappers
-skip. The API they are written against:
+`RealTimeCOINEnsemble` ships with the package, so both validators run and gate.
+The import guard around it survives only as a safety net: were the class (or a
+fixture) missing, they would return
+`{"errored": False, "skipped": True, "passed": True, "skipped_reason": ...}`
+and their pytest wrappers would skip rather than fail. The API they are written
+against:
 
 ```python
 RealTimeCOINEnsemble(runs=..., seed=..., max_cores=0, **member_kwargs)

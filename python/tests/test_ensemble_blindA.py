@@ -827,7 +827,7 @@ def test_readonly_properties():
 
 
 # ==========================================================================
-# Phase 2 (unit E1) - present but not yet implemented
+# Phase 2 - cross-run context alignment
 # ==========================================================================
 
 
@@ -852,10 +852,7 @@ def test_phase2_context_vectors(method):
     for q, y in zip([1, 1, 2], [0.1, 0.2, -0.1]):
         ens.observe_q(q)
         ens.observe_y(y)
-    try:
-        value = getattr(ens, method)()
-    except NotImplementedError:
-        pytest.skip("phase 2: unit E1")
+    value = getattr(ens, method)()
     # Only the stationary distribution may be empty, and only when no member
     # holds a context - which cannot be the case after three observed trials.
     assert value is not None, "%s returned None with contexts instantiated" % method
@@ -888,10 +885,7 @@ def test_phase2_runs_one_reduction(method):
         member.observe_y(y)
 
     density = method in PHASE2_DENSITY_QUERIES
-    try:
-        value = getattr(ens, method)(grid) if density else getattr(ens, method)()
-    except NotImplementedError:
-        pytest.skip("phase 2: unit E1")
+    value = getattr(ens, method)(grid) if density else getattr(ens, method)()
     expected = (
         getattr(member, method)(grid) if density else getattr(member, method)()
     )
@@ -914,9 +908,6 @@ def test_phase2_context_densities(method):
     for q, y in zip([1, 1, 2], [0.1, 0.2, -0.1]):
         ens.observe_q(q)
         ens.observe_y(y)
-    try:
-        value = getattr(ens, method)(grid)
-    except NotImplementedError:
-        pytest.skip("phase 2: unit E1")
+    value = getattr(ens, method)(grid)
     for density in value.values():
         assert np.shape(density) == (grid.size,)

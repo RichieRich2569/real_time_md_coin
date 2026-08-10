@@ -1,4 +1,4 @@
-﻿"""Recovery of known latent contexts from synthetic data.
+"""Recovery of known latent contexts from synthetic data.
 
 Translated from ``validation/validate_context_recovery.m``.
 

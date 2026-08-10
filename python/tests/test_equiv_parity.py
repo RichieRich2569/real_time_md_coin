@@ -280,8 +280,9 @@ def test_original_coin_monte_carlo_passes():
 def test_ensemble_vs_coin(blind):
     """``RealTimeCOINEnsemble`` run-averaging matches COIN's.
 
-    Skips until the ensemble translation unit merges; both validators report
-    ``skipped=True`` with ``skipped_reason`` rather than failing.
+    Both validators gate for real. The ``skipped`` branch survives only as a
+    safety net for a missing fixture / unimportable ensemble, which they report
+    as ``skipped=True`` with a ``skipped_reason`` rather than as a failure.
     """
     import importlib
 

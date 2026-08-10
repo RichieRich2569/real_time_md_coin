@@ -1,4 +1,4 @@
-﻿"""Posterior predictive p-value validation (back-compatibility wrapper).
+"""Posterior predictive p-value validation (back-compatibility wrapper).
 
 Translated from ``validation/validate_p_values.m``.
 

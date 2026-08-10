@@ -37,11 +37,12 @@ trial-phase correspondence is therefore not fixed by the spec, so this validator
 evaluates BOTH natural alignments - lag 0 (same index) and lag 1 (the ensemble
 leads COIN by one trial) - reports both, and gates on the better-fitting one.
 
-Pending dependency
+Availability guard
 ------------------
-``RealTimeCOINEnsemble`` is delivered by a separate translation unit. Until it
-lands, :func:`run` returns ``skipped=True`` with
-``skipped_reason="pending unit D1 merge"``. The pinned API::
+``RealTimeCOINEnsemble`` is live, so this validator runs and gates for real. The
+import guard around it is kept as a safety net only: a MISSING ensemble class (or
+a missing fixture) yields ``skipped=True`` rather than a spurious failure, while
+a present-but-broken ensemble fails. The pinned API::
 
     RealTimeCOINEnsemble(runs=..., seed=..., max_cores=0, **member_kwargs)
     .simulate(q_seq, y_seq) -> object/mapping exposing a run-averaged
@@ -77,8 +78,9 @@ FIXTURE_PATH = (
     / "ensemble_blindB_coin.mat"
 )
 
-#: Reported when the ensemble class is not importable yet.
-PENDING_REASON = "pending unit D1 merge"
+#: Reported if the ensemble class is ever unimportable (safety net only:
+#: RealTimeCOINEnsemble ships with the package).
+PENDING_REASON = "RealTimeCOINEnsemble unavailable"
 
 #: Pass gates, verbatim from the ``.m``.
 #:

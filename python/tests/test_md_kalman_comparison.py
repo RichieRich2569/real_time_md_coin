@@ -232,11 +232,8 @@ def test_md_state_moment_shapes_and_psd():
             "%s is not PSD" % name
         )
 
-    # Public MD moment accessor, once unit B1 lands.
-    try:
-        mu_state, cov_state = coin.state_moments()
-    except NotImplementedError:
-        pytest.skip("state_moments pending unit B1")
+    # Public MD moment accessor.
+    mu_state, cov_state = coin.state_moments()
     mu_state = np.asarray(mu_state).reshape(-1)
     cov_state = np.asarray(cov_state)
     assert mu_state.shape == (N,), "state_moments mean must be length N in MD mode"
@@ -246,7 +243,7 @@ def test_md_state_moment_shapes_and_psd():
 
 
 def test_md_predictive_feedback_moments_match_public_query():
-    """The locally derived moments agree with the public query after B1 merges."""
+    """The locally derived moments agree with the public query."""
     coin = RealTimeCOIN(rng=5, **KALMAN_CFG)
     y = simulate_linear_gaussian(31, 4)
     for t in range(4):
@@ -255,10 +252,7 @@ def test_md_predictive_feedback_moments_match_public_query():
     coin.observe_q(1)
 
     mu_local, sigma_local = md_predictive_feedback_moments(coin, 1)
-    try:
-        mu_public, sigma_public = coin.predictive_feedback_moments(0)
-    except NotImplementedError:
-        pytest.skip("predictive_feedback_moments pending unit B1")
+    mu_public, sigma_public = coin.predictive_feedback_moments(0)
     np.testing.assert_allclose(np.asarray(mu_public).reshape(-1), mu_local, atol=1e-10)
     np.testing.assert_allclose(np.asarray(sigma_public), sigma_local, atol=1e-10)
 

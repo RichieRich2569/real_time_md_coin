@@ -21,11 +21,9 @@ the suite level via the ``results["passed"]`` gate.
 
 Stage availability in this worktree
 -----------------------------------
-* ``single_context_kalman``, ``multidim_kalman`` and ``particle_convergence``
-  belong to unit C3. Their imports are guarded, so until C3 merges they are
-  reported as ``errored`` with ``error="pending unit C3 merge"`` and the rest of
-  the suite still runs. ``particle_convergence`` is fixture-gated inside C3;
-  whatever it reports is passed through unchanged.
+* ``particle_convergence`` is fixture-gated: its oracle-RMSE check is
+  reported as skipped (and excluded from its own verdict) when the frozen
+  ``COIN.m`` traces are absent. Whatever it reports is passed through unchanged.
 * ``original_coin_monte_carlo`` compares against the offline ``COIN.m`` oracle
   by replaying frozen MATLAB traces (see
   :mod:`validation.validate_original_coin_monte_carlo`). When those traces are
@@ -47,7 +45,6 @@ seeds the ``.m`` would have used are still recorded in the stage's
 from __future__ import annotations
 
 import argparse
-import importlib
 import pathlib
 import sys
 
@@ -61,8 +58,11 @@ if __package__ in (None, ""):        # pragma: no cover - direct-script launch
 from validation import (
     benchmark_realtimecoin,
     validate_context_recovery,
+    validate_multidim_kalman,
     validate_original_coin_monte_carlo,
     validate_p_values_extended,
+    validate_particle_convergence,
+    validate_single_context_kalman,
     validate_stress_cases,
 )
 
@@ -104,15 +104,6 @@ GATING_STAGES = (
     "context_recovery",
     "stress_cases",
 )
-
-#: Retained for backwards compatibility with callers that imported it while the
-#: oracle stage was hardcoded as skipped. The stage now calls
-#: :func:`validation.validate_original_coin_monte_carlo.run`, which builds its
-#: own (more specific) reason string when the fixtures are absent.
-SKIPPED_REASON = "requires frozen MATLAB oracle fixtures (see unit D2)"
-
-#: Error recorded on a stage whose module has not been merged yet.
-PENDING_C3 = "pending unit C3 merge"
 
 
 def compact_config():
@@ -193,17 +184,17 @@ def run(profile="compact", seed=DEFAULT_SEED, strict=False, make_plots=False):
         }
     }
 
-    results["single_context_kalman"] = _c3_stage(
+    results["single_context_kalman"] = _run_stage(
         "single_context_kalman",
-        "validate_single_context_kalman",
+        validate_single_context_kalman.run,
         trials=suite["kalman_trials"],
         particles=suite["kalman_particles"],
         seed=seed + STAGE_SEED_OFFSETS["single_context_kalman"],
         strict=False,
     )
-    results["multidim_kalman"] = _c3_stage(
+    results["multidim_kalman"] = _run_stage(
         "multidim_kalman",
-        "validate_multidim_kalman",
+        validate_multidim_kalman.run,
         trials=suite["kalman_trials"],
         particles=suite["kalman_particles"],
         dim=2,
@@ -238,9 +229,9 @@ def run(profile="compact", seed=DEFAULT_SEED, strict=False, make_plots=False):
         seed + STAGE_SEED_OFFSETS["original_coin_monte_carlo"] + i
         for i in range(5)
     ]
-    results["particle_convergence"] = _c3_stage(
+    results["particle_convergence"] = _run_stage(
         "particle_convergence",
-        "validate_particle_convergence",
+        validate_particle_convergence.run,
         particles=suite["convergence_particles"],
         trials=suite["convergence_trials"],
         datasets=suite["convergence_datasets"],
@@ -321,58 +312,6 @@ def _run_stage(name, fn, **kwargs):
             "error": str(err),
             "error_type": type(err).__name__,
         }
-
-
-def _c3_stage(name, module_name, **kwargs):
-    """Run a stage whose module belongs to unit C3, tolerating its absence.
-
-    Parameters
-    ----------
-    name : str
-        Stage name.
-    module_name : str
-        Module under ``validation`` providing ``run``.
-    **kwargs
-        Forwarded to that ``run``.
-
-    Returns
-    -------
-    dict
-        The validator's results dict, an errored stub, or - when the module
-        itself does not exist yet - a stub carrying ``error=PENDING_C3`` so this
-        suite runs standalone before C3 merges.
-
-    Notes
-    -----
-    Only a MISSING stage module counts as "pending C3". A module that exists but
-    whose own imports fail is reported as an ordinary errored stage, so a real
-    dependency break is never disguised as an unmerged unit.
-    """
-    target = "validation.%s" % module_name
-    try:
-        module = importlib.import_module(target)
-    except ImportError as err:
-        missing = getattr(err, "name", None)
-        if missing == target:
-            print(
-                'Validator "%s" unavailable: %s (%s)' % (name, PENDING_C3, err),
-                file=sys.stderr,
-            )
-            return {
-                "passed": False,
-                "errored": True,
-                "error": PENDING_C3,
-                "error_type": type(err).__name__,
-                "import_error": str(err),
-            }
-        print('Validator "%s" failed to import: %s' % (name, err), file=sys.stderr)
-        return {
-            "passed": False,
-            "errored": True,
-            "error": str(err),
-            "error_type": type(err).__name__,
-        }
-    return _run_stage(name, module.run, **kwargs)
 
 
 def _failed_stages(results):

@@ -22,10 +22,13 @@ What differs from the MATLAB original
    :func:`realtimecoin.context.preview_cue_pmf`).
 
    Be aware of what this costs: MATLAB's PIT comes from the PRODUCTION queries
-   ``predictive_state_feedback_cdf`` / ``predictive_cue_p_value``, both of
-   which are unimplemented in this worktree, so ``best_feedback_ks`` currently
-   gates the validation mirror rather than production code. Switch ``_pit_run``
-   over to those queries once they land.
+   ``predictive_state_feedback_cdf`` / ``predictive_cue_p_value``, so
+   ``best_feedback_ks`` gates the validation mirror here rather than production
+   code. Both production queries DO exist in this package and are gated
+   directly by :mod:`validation.validate_p_values` and
+   :mod:`validation.validate_p_values_extended`; the mirror is kept here so
+   this validator stays an independent second implementation, which is what
+   makes a shared-bug regression visible.
 2. **The oracle RMSE is FIXTURE-GATED.** MATLAB calls ``compare_original_coin``,
    which runs the offline ``COIN.m`` to generate both the feedback stream and
    the reference motor output. There is no Python COIN, so the oracle traces
@@ -164,10 +167,12 @@ _ORACLE_DEFAULTS = {
 def _pass_summary(checks):
     """Aggregate named checks into one overall pass flag.
 
-    Local stand-in for ``validation_pass_summary.m``. ``None`` marks a SKIPPED
-    check: it is preserved in the output and excluded from the verdict, so a
-    missing oracle fixture never turns into a spurious failure. ``nan`` still
-    counts as a failure.
+    A deliberately DIFFERENT rule from the shared
+    :func:`validation.pass_summary.pass_summary`, which is why this validator
+    keeps a local copy: there ``None`` is a FAILURE (no interpretable metric),
+    here ``None`` marks a SKIPPED check - preserved in the output and excluded
+    from the verdict - so a missing oracle fixture never turns into a spurious
+    failure. ``nan`` still counts as a failure in both.
 
     Parameters
     ----------

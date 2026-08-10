@@ -1,4 +1,4 @@
-﻿"""Posterior predictive calibration diagnostics (PIT self-calibration).
+"""Posterior predictive calibration diagnostics (PIT self-calibration).
 
 Translated from ``validation/validate_p_values_extended.m``.
 
@@ -23,8 +23,10 @@ Deviations from the MATLAB source
 ---------------------------------
 ``validate_p_values_extended.m`` scores each trial with the class queries
 ``coin.predictive_state_feedback_cdf(y, q)`` and ``coin.predictive_cue_p_value(q)``.
-Those two are stubs in this worktree (unit C2 owns
-:mod:`realtimecoin.queries_density`), so both PITs are computed here instead:
+Both queries exist in this package (:mod:`realtimecoin.queries_density`) and are
+gated directly by :mod:`validation.validate_p_values`; here the two PITs are
+recomputed INDEPENDENTLY instead, so this validator is a second implementation
+rather than a re-run of the production one:
 
 * **Feedback PIT** - :func:`_predictive_feedback_components` rebuilds the
   predictive feedback MIXTURE (per-particle, per-context weights, means and

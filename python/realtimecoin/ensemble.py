@@ -16,6 +16,11 @@ offline ``runs``: Monte-Carlo variance reduction ("probability averaging").
 The wrapper does NOT change any per-trial behaviour; each member is an ordinary
 :class:`~realtimecoin.model.RealTimeCOIN`.
 
+The CONTEXT-INDEXED queries cannot be averaged slot by slot, because every
+member labels its contexts in its own arbitrary frame; they first map all
+members onto one reference frame through
+:mod:`realtimecoin.ensemble_alignment` (SPEC Part 10), then average there.
+
 
 Random-stream contract (replaces SPEC section 3's MATLAB ``RandStream`` design)
 -------------------------------------------------------------------------------
@@ -98,6 +103,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .ensemble_alignment import (
+    ensemble_context_alignment as _ensemble_context_alignment,
+    ensemble_context_density as _ensemble_context_density,
+    ensemble_context_vector as _ensemble_context_vector,
+)
 from .exceptions import ModelFormatError, RealTimeCOINError
 from .model import RealTimeCOIN
 
@@ -1222,44 +1232,40 @@ class RealTimeCOINEnsemble:
         self._desynced = bool(s.get("desynced", False))
 
     # ------------------------------------------------------------------
-    # Phase 2 - cross-run context alignment (unit E1)
+    # Phase 2 - context-indexed queries, in the cross-run reference frame
+    # (see realtimecoin.ensemble_alignment and SPEC_ensemble Part 10)
     # ------------------------------------------------------------------
 
     def responsibilities_vector(self):
         """Cross-run averaged posterior context probabilities (SPEC 10.4).
+
+        Zero-fill average in the common reference frame: real mass in slots
+        ``0 .. Kref - 1``, novel mass in slot ``Kref``, the rest zero.
 
         Returns
         -------
         numpy.ndarray
             ``(max_contexts + 1,)`` row in the common reference frame, summing
             to 1.
-
-        Raises
-        ------
-        NotImplementedError
-            Always: Phase 2, implemented by unit E1.
         """
-        raise NotImplementedError(
-            "responsibilities_vector is Phase 2 (cross-run context alignment); "
-            "implemented by unit E1."
+        self._check_lockstep()
+        return _ensemble_context_vector(
+            self, lambda m: m.responsibilities_vector()
         )
 
     def predicted_context_probabilities_vector(self):
         """Cross-run averaged predicted context probabilities (SPEC 10.4).
 
+        The pre-observation counterpart of :meth:`responsibilities_vector`.
+
         Returns
         -------
         numpy.ndarray
             ``(max_contexts + 1,)`` row in the common reference frame.
-
-        Raises
-        ------
-        NotImplementedError
-            Always: Phase 2, implemented by unit E1.
         """
-        raise NotImplementedError(
-            "predicted_context_probabilities_vector is Phase 2 (cross-run "
-            "context alignment); implemented by unit E1."
+        self._check_lockstep()
+        return _ensemble_context_vector(
+            self, lambda m: m.predicted_context_probabilities_vector()
         )
 
     def sampled_context_count(self):
@@ -1269,62 +1275,99 @@ class RealTimeCOINEnsemble:
         -------
         numpy.ndarray
             ``(max_contexts + 1,)`` row in the common reference frame.
-
-        Raises
-        ------
-        NotImplementedError
-            Always: Phase 2, implemented by unit E1.
         """
-        raise NotImplementedError(
-            "sampled_context_count is Phase 2 (cross-run context alignment); "
-            "implemented by unit E1."
+        self._check_lockstep()
+        return _ensemble_context_vector(
+            self, lambda m: m.sampled_context_count()
         )
 
     def stationary_context_probabilities(self):
         """Cross-run averaged stationary context distribution (SPEC 10.4).
 
+        Each member's ``(K_r,)`` stationary row is zero-filled onto the
+        reference contexts through the cross-run matching, summed over runs and
+        renormalised to sum to 1 (uniform if the accumulator is empty).
+
         Returns
         -------
-        numpy.ndarray or None
-            ``(Kref,)`` over the reference contexts, or ``None`` when no member
-            holds a context.
+        numpy.ndarray
+            ``(Kref,)`` over the reference contexts; an EMPTY ``(0,)`` array
+            when no member holds a context - the single-member convention (the
+            MATLAB original returns ``[]`` there), so the ``runs == 1``
+            reduction of SPEC 10.5.1 holds for that case too.
 
-        Raises
-        ------
-        NotImplementedError
-            Always: Phase 2, implemented by unit E1.
+        Notes
+        -----
+        DELIBERATE FORK from ``stationary_context_probabilities.m``, which
+        always returns ``acc / sum(acc)``: with exactly ONE contributing run the
+        scattered accumulator is returned VERBATIM instead. That run necessarily
+        holds ``Kref`` contexts (it is the only member with any), so it IS the
+        reference member and - unless two of its prototypes coincide exactly,
+        making the self-matching non-unique - the accumulator already equals its
+        stationary row. That row sums to ``1 +- 1 ulp`` rather than exactly 1
+        (``stationary_distribution`` ends in a division), so the extra
+        normalisation would perturb the low bits and break the bit-exact
+        ``runs == 1`` reduction SPEC 10.5.1 demands - which is exactly what the
+        blind Phase-2 suites assert. The fork therefore resolves a conflict
+        between the MATLAB source and the MATLAB tests in favour of the SPEC.
+        It is the same single-contributor pass-through :func:`_pool_moments`
+        applies for SPEC 5.5, and it costs nothing: the result still sums to 1
+        to within a few eps, as SPEC 10.5.2 requires.
         """
-        raise NotImplementedError(
-            "stationary_context_probabilities is Phase 2 (cross-run context "
-            "alignment); implemented by unit E1."
-        )
+        self._check_lockstep()
+        alignment = _ensemble_context_alignment(self)
+        k_ref = int(alignment["k_ref"])
+        if k_ref == 0:
+            return np.zeros(0)
+
+        acc = np.zeros(k_ref)                                    # (Kref,)
+        contributors = 0
+        for r, member in enumerate(self._members):
+            s = np.asarray(
+                member.stationary_context_probabilities(), dtype=float
+            ).reshape(-1)                                        # (K_r,)
+            if s.size == 0:
+                continue
+            contributors += 1
+            for i in range(min(int(alignment["k"][r]), s.size)):
+                acc[alignment["perm"][r][i]] += s[i]
+
+        if contributors == 1:
+            return acc                                # exact pass-through
+        total = float(acc.sum())
+        if total > 0:
+            return acc / total
+        return np.full(k_ref, 1.0 / k_ref)
 
     def state_given_context_probability(self, values):
         """Cross-run averaged per-context state density (SPEC 10.4).
 
+        NaN-omit average in the reference frame: reference context ``j``'s
+        density is the mean over only the runs holding a context matched to
+        ``j``; a label no run holds is absent from the result.
+
         Parameters
         ----------
         values : array_like
-            ``(K,)`` scalar grid, or ``(K, N)`` multi-dimensional grid.
+            ``(K,)`` scalar grid, or ``(K, N)`` multi-dimensional grid - the
+            single-model shape rules exactly.
 
         Returns
         -------
         dict
-            ``{reference_label: (K,) density}``.
-
-        Raises
-        ------
-        NotImplementedError
-            Always: Phase 2, implemented by unit E1.
+            ``{0-based reference label: (K,) density}``.
         """
-        raise NotImplementedError(
-            "state_given_context_probability is Phase 2 (cross-run context "
-            "alignment); implemented by unit E1."
+        self._check_lockstep()
+        return _ensemble_context_density(
+            self, lambda m: m.state_given_context_probability(values)
         )
 
     def state_feedback_given_context_probability(self, values):
         """Cross-run averaged per-context feedback density (SPEC 10.4).
 
+        Observation-space counterpart of
+        :meth:`state_given_context_probability`.
+
         Parameters
         ----------
         values : array_like
@@ -1333,16 +1376,11 @@ class RealTimeCOINEnsemble:
         Returns
         -------
         dict
-            ``{reference_label: (K,) density}``.
-
-        Raises
-        ------
-        NotImplementedError
-            Always: Phase 2, implemented by unit E1.
+            ``{0-based reference label: (K,) density}``.
         """
-        raise NotImplementedError(
-            "state_feedback_given_context_probability is Phase 2 (cross-run "
-            "context alignment); implemented by unit E1."
+        self._check_lockstep()
+        return _ensemble_context_density(
+            self, lambda m: m.state_feedback_given_context_probability(values)
         )
 
 

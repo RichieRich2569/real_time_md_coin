@@ -6,7 +6,7 @@ scalar Kalman filter, so its posterior state mean must track a directly coded
 filter that knows the true parameters.
 
 Deviation from the MATLAB source: that test recovers the posterior mean by
-trapezoid-integrating ``state_probability`` (unit C2, still a stub here).
+trapezoid-integrating ``state_probability`` over a grid.
 ``state_probability`` is documented as the Gaussian mixture over
 ``responsibilities`` and the FILTERED state moments, so the same mean is
 computed here in closed form from those two arrays - and, as a second, weaker

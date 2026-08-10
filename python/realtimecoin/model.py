@@ -474,8 +474,10 @@ class RealTimeCOIN:
     def _restore_state(self, state, *, trial, cue_values, alignment_seed):
         """Install a particle state and its bookkeeping in place.
 
-        Minimal internal restore path shared by :meth:`from_state`; unit C1
-        formalises the full persistence layer in :mod:`realtimecoin.persist`.
+        Minimal internal restore path used by :meth:`from_state` for a
+        hand-built particle state. The full save/load persistence layer -
+        schema versioning, validation and the model's own snapshot round-trip -
+        lives in :mod:`realtimecoin.persist`.
 
         Parameters
         ----------

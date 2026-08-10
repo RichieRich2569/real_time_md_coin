@@ -1,41 +1,19 @@
 """Streaming edge cases: missing feedback, cue-only trials, caps, zero noise.
 
 Python port of ``tests/test_behavioral_edges.m``. The MATLAB test reads several
-of its facts out of ``diagnostics()`` (unit B3's alignment); those reads are
-wrapped in :func:`_skipping_pending_units`, and the same facts are additionally
-asserted directly against ``model.D``, which unit B1 owns outright. The MATLAB
-"trial-counter bug" is not a bug: a missing observation is still a trial, so
-three ``observe_y`` calls must leave ``Trial == 3`` (see ``CODE_REVIEW.md``, the
-refuted item at the end of section 6).
+of its facts out of ``diagnostics()`` (the global alignment); each of those is
+ALSO asserted directly against ``model.D``, so a summary-layer bug and a
+particle-state bug cannot mask each other. The MATLAB "trial-counter bug" is not
+a bug: a missing observation is still a trial, so three ``observe_y`` calls must
+leave ``Trial == 3`` (see ``CODE_REVIEW.md``, the refuted item at the end of
+section 6).
 """
 
 from __future__ import annotations
 
-import contextlib
-
 import numpy as np
-import pytest
 
 from realtimecoin import RealTimeCOIN
-
-
-@contextlib.contextmanager
-def _skipping_pending_units(what):
-    """Skip the enclosed assertions while their unit is still a stub.
-
-    Parameters
-    ----------
-    what : str
-        Short description of the pending dependency.
-
-    Yields
-    ------
-    None
-    """
-    try:
-        yield
-    except NotImplementedError as exc:
-        pytest.skip("pending %s: %s" % (what, exc))
 
 
 def _edge_model():
@@ -67,11 +45,10 @@ def test_responsibilities_stay_normalised_across_edge_trials():
     model = _edge_model()
     np.testing.assert_allclose(model.D.responsibilities.sum(axis=1), 1.0, atol=1e-9)
 
-    with _skipping_pending_units("unit B3 (alignment)"):
-        vector = model.responsibilities_vector()
-        assert abs(float(np.sum(vector)) - 1.0) < 1e-9, (
-            "Responsibilities not normalized"
-        )
+    vector = model.responsibilities_vector()
+    assert abs(float(np.sum(vector)) - 1.0) < 1e-9, (
+        "Responsibilities not normalized"
+    )
 
 
 def test_context_cap_and_matrix_shapes_survive_streaming():
@@ -201,10 +178,9 @@ def test_infer_bias_produces_finite_bias_samples():
     assert np.all(np.isfinite(model.D.bias_mean))
     assert np.all(model.D.bias_var >= 0)
 
-    with _skipping_pending_units("unit B3 (alignment)"):
-        diag = model.diagnostics()
-        assert "bias" in diag, "Bias diagnostics missing"
-        assert np.all(np.isfinite(np.asarray(diag["bias"])))
+    diag = model.diagnostics()
+    assert "bias" in diag, "Bias diagnostics missing"
+    assert np.all(np.isfinite(np.asarray(diag["bias"])))
 
 
 def test_bias_is_pinned_to_zero_when_not_inferred():
@@ -289,8 +265,7 @@ def test_zero_noise_density_query_is_not_all_nonfinite():
     """The degenerate posterior density still has finite entries."""
     model = _deterministic_model()
     model.observe_y(0.2)
-    with _skipping_pending_units("unit C2 (densities)"):
-        dens = model.state_probability(np.linspace(-1.0, 1.0, 101))
-        assert np.any(np.isfinite(dens)), (
-            "Deterministic density should not produce all nonfinite values"
-        )
+    dens = model.state_probability(np.linspace(-1.0, 1.0, 101))
+    assert np.any(np.isfinite(dens)), (
+        "Deterministic density should not produce all nonfinite values"
+    )

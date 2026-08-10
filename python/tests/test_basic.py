@@ -5,16 +5,13 @@ suite has no counterpart for (MATLAB seeds the global stream; here every draw
 goes through ``model.rng``, which is exactly what makes a same-seed replay
 byte-identical and therefore worth asserting).
 
-Checks that reach a module still owned by another unit - ``responsibilities_map``
-and ``diagnostics`` (unit B3's alignment), ``state_probability`` (unit C2's
-densities) - are wrapped in :func:`_skipping_pending_units`, so this file passes
-today and tightens automatically as those units merge. Everything that depends
-only on unit B1 is asserted unconditionally.
+Every check is asserted unconditionally, including the ones that reach the
+global alignment (``responsibilities_map``, ``diagnostics``) and the density
+queries (``state_probability``).
 """
 
 from __future__ import annotations
 
-import contextlib
 
 import numpy as np
 import pytest
@@ -23,25 +20,6 @@ from realtimecoin import RealTimeCOIN
 
 #: ``numpy.trapz`` was renamed ``numpy.trapezoid`` in numpy 2.0.
 _trapezoid = getattr(np, "trapezoid", None) or np.trapz
-
-
-@contextlib.contextmanager
-def _skipping_pending_units(what):
-    """Skip the enclosed assertions while their unit is still a stub.
-
-    Parameters
-    ----------
-    what : str
-        Short description of the pending dependency, used in the skip message.
-
-    Yields
-    ------
-    None
-    """
-    try:
-        yield
-    except NotImplementedError as exc:
-        pytest.skip("pending %s: %s" % (what, exc))
 
 
 def test_initial_state_is_a_single_context(make_model):
@@ -57,10 +35,9 @@ def test_initial_state_is_a_single_context(make_model):
 def test_initial_responsibilities_map_has_one_context(make_model):
     """Global-frame view of the same fact (needs the alignment unit)."""
     model = make_model(num_particles=20, max_contexts=3, rng=1)
-    with _skipping_pending_units("unit B3 (alignment)"):
-        probs = model.responsibilities_map()
-        assert len(probs) == 1, "Initial context count mismatch"
-        assert abs(probs[0] - 1.0) < 1e-12, "Initial context probability not 1"
+    probs = model.responsibilities_map()
+    assert len(probs) == 1, "Initial context count mismatch"
+    assert abs(probs[0] - 1.0) < 1e-12, "Initial context probability not 1"
 
 
 def test_single_observation_keeps_everything_normalised(make_model):
@@ -84,17 +61,15 @@ def test_global_context_summaries_normalise(make_model):
     model.observe_q(1)
     model.observe_y(0.2)
 
-    with _skipping_pending_units("unit B3 (alignment)"):
-        probs = model.responsibilities_map()
-        assert abs(sum(probs.values()) - 1.0) < 1e-6, (
-            "Context probabilities do not sum to 1"
-        )
+    probs = model.responsibilities_map()
+    assert abs(sum(probs.values()) - 1.0) < 1e-6, (
+        "Context probabilities do not sum to 1"
+    )
 
-    with _skipping_pending_units("unit B3 (alignment)"):
-        vector = model.predicted_context_probabilities_vector()
-        assert abs(float(np.sum(vector)) - 1.0) < 1e-9, (
-            "Predicted probabilities do not sum to 1"
-        )
+    vector = model.predicted_context_probabilities_vector()
+    assert abs(float(np.sum(vector)) - 1.0) < 1e-9, (
+        "Predicted probabilities do not sum to 1"
+    )
 
 
 def test_state_probability_integrates_to_about_one(make_model):
@@ -104,10 +79,9 @@ def test_state_probability_integrates_to_about_one(make_model):
     model.observe_y(0.2)
 
     grid = np.linspace(-3.0, 3.0, 601)
-    with _skipping_pending_units("unit C2 (densities)"):
-        dens = model.state_probability(grid)
-        integral = float(_trapezoid(dens, grid))
-        assert 0.0 < integral < 2.0, "State probability integral out of bounds"
+    dens = model.state_probability(grid)
+    integral = float(_trapezoid(dens, grid))
+    assert 0.0 < integral < 2.0, "State probability integral out of bounds"
 
 
 def test_diagnostics_expose_the_aligned_modal_subset(make_model):
@@ -116,13 +90,12 @@ def test_diagnostics_expose_the_aligned_modal_subset(make_model):
     model.observe_q(1)
     model.observe_y(0.2)
 
-    with _skipping_pending_units("unit B3 (alignment)"):
-        diag = model.diagnostics()
-        assert "predicted_probabilities" in diag
-        assert "alignment" in diag
-        assert diag["predicted_probabilities"].shape[0] == int(
-            np.sum(diag["alignment"]["modal_particle_mask"])
-        ), "Diagnostics should expose the aligned modal particle subset"
+    diag = model.diagnostics()
+    assert "predicted_probabilities" in diag
+    assert "alignment" in diag
+    assert diag["predicted_probabilities"].shape[0] == int(
+        np.sum(diag["alignment"]["modal_particle_mask"])
+    ), "Diagnostics should expose the aligned modal particle subset"
 
 
 def test_motor_output_uses_predicted_not_posterior_weights(make_model):

@@ -9,42 +9,19 @@ The MATLAB test detects the "did not touch the alignment" property indirectly,
 by observing that ``context_alignment().cache_state_version`` changed across an
 ``observe_y``. Here it is asserted directly and more strongly: the queries must
 leave ``model.alignment_cache`` at ``None`` and ``model.state_version``
-unchanged, which needs no alignment machinery at all and therefore also works
-while unit B3 is stubbed.
+unchanged, which needs no alignment machinery at all.
 
 The normalisation checks themselves route through
-``context.local_context_probability_vector``, which selects the modal particles
-via unit B3's ``select_modal_contexts``; they are wrapped in
-:func:`_skipping_pending_units` until that unit merges.
+``context.local_context_probability_vector``, which picks the modal particles
+with ``alignment.select_modal_contexts`` - the ONLY piece of the alignment
+module the local frame touches, and one that builds no cache.
 """
 
 from __future__ import annotations
 
-import contextlib
-
 import numpy as np
-import pytest
 
 from realtimecoin import RealTimeCOIN
-
-
-@contextlib.contextmanager
-def _skipping_pending_units(what):
-    """Skip the enclosed assertions while their unit is still a stub.
-
-    Parameters
-    ----------
-    what : str
-        Short description of the pending dependency.
-
-    Yields
-    ------
-    None
-    """
-    try:
-        yield
-    except NotImplementedError as exc:
-        pytest.skip("pending %s: %s" % (what, exc))
 
 
 def _model():
@@ -63,12 +40,11 @@ def _model():
 def test_local_summaries_are_normalised_context_vectors():
     """All three summaries are length-C vectors summing to one."""
     model = _model()
-    with _skipping_pending_units("unit B3 (alignment)"):
-        summaries = {
-            "predicted": model.predicted_context_probabilities_local(),
-            "responsibilities": model.context_responsibilities_local(),
-            "count": model.sampled_context_count_local(),
-        }
+    summaries = {
+        "predicted": model.predicted_context_probabilities_local(),
+        "responsibilities": model.context_responsibilities_local(),
+        "count": model.sampled_context_count_local(),
+    }
     for name, vector in summaries.items():
         vector = np.asarray(vector)
         assert vector.ndim == 1, name
@@ -93,12 +69,7 @@ def test_local_summaries_do_not_touch_the_alignment_cache():
         model.context_responsibilities_local,
         model.sampled_context_count_local,
     ):
-        try:
-            query()
-        except NotImplementedError:
-            # select_modal_contexts is unit B3's; reaching it is itself proof
-            # that no CACHE was built (ensure_context_alignment is never called).
-            pass
+        query()
         assert model.alignment_cache is None, (
             "%s built the global alignment cache" % query.__name__
         )
@@ -122,10 +93,7 @@ def test_local_summaries_are_read_only():
         model.context_responsibilities_local,
         model.sampled_context_count_local,
     ):
-        try:
-            query()
-        except NotImplementedError:
-            pass
+        query()
 
     after = model.D.as_dict()
     for name, value in before.items():
@@ -143,7 +111,6 @@ def test_local_and_global_frames_agree_on_a_single_context_model():
     """
     model = RealTimeCOIN(num_particles=12, max_contexts=1, rng=7)
     model.observe_y(0.3)
-    with _skipping_pending_units("unit B3 (alignment)"):
-        vector = np.asarray(model.sampled_context_count_local())
+    vector = np.asarray(model.sampled_context_count_local())
     np.testing.assert_allclose(vector[0], 1.0, atol=1e-12)
     np.testing.assert_allclose(vector[1:], 0.0, atol=1e-12)

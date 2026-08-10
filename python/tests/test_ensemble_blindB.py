@@ -612,7 +612,7 @@ def test_members_do_not_share_a_generator():
 
 
 # ========================================================================= #
-# Phase 2 (unit E1): the context-indexed queries exist but are not yet live.
+# Phase 2: the cross-run-aligned context-indexed queries.
 # ========================================================================= #
 
 
@@ -628,10 +628,7 @@ def test_phase2_vector_queries_are_aligned(method):
     for q, y in zip([1, 1, 2, 2], [0.1, 0.2, -0.1, 0.3]):
         ens.observe_q(q)
         ens.observe_y(y)
-    try:
-        value = getattr(ens, method)()
-    except NotImplementedError:
-        pytest.skip("phase 2: unit E1")
+    value = getattr(ens, method)()
     # None is admissible only for the stationary distribution with no contexts,
     # which four observed trials rule out; anything else is a silent failure.
     assert value is not None, "%s returned None with contexts instantiated" % method
@@ -655,10 +652,7 @@ def test_phase2_vectors_are_member_order_invariant(method):
     for q, y in zip([1, 1, 2, 2], [0.1, 0.2, -0.1, 0.3]):
         ens.observe_q(q)
         ens.observe_y(y)
-    try:
-        forward = np.asarray(getattr(ens, method)(), dtype=float)
-    except NotImplementedError:
-        pytest.skip("phase 2: unit E1")
+    forward = np.asarray(getattr(ens, method)(), dtype=float)
 
     ens._members = list(reversed(ens._members))
     reversed_order = np.asarray(getattr(ens, method)(), dtype=float)
@@ -678,10 +672,7 @@ def test_phase2_density_queries_are_aligned(method):
     for q, y in zip([1, 1, 2, 2], [0.1, 0.2, -0.1, 0.3]):
         ens.observe_q(q)
         ens.observe_y(y)
-    try:
-        value = getattr(ens, method)(grid)
-    except NotImplementedError:
-        pytest.skip("phase 2: unit E1")
+    value = getattr(ens, method)(grid)
     for density in value.values():
         density = np.asarray(density, dtype=float)
         assert density.shape == (grid.size,)

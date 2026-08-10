@@ -167,8 +167,9 @@ assertions and the helpers in `python/tests/helpers.py` and
 
 ## `@RealTimeCOINEnsemble`
 
-Documented from `docs/SPEC_ensemble.md` and the agreed Python API. The
-context-indexed queries are **Phase 2**.
+Documented from `docs/SPEC_ensemble.md` and the agreed Python API. Both phases
+are implemented: the run-averaged queries (Phase 1) and the cross-run
+context-aligned queries (Phase 2).
 
 ### Construction and state machine
 
@@ -193,7 +194,7 @@ context-indexed queries are **Phase 2**.
 | `novel_state_probability(ens, values)` | `ens.novel_state_probability(values)` |
 | `novel_state_feedback_probability(ens, values)` | `ens.novel_state_feedback_probability(values)` |
 
-### Context-indexed queries (Phase 2)
+### Context-indexed queries (Phase 2, cross-run aligned)
 
 | MATLAB | Python |
 | --- | --- |

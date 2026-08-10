@@ -1,4 +1,4 @@
-﻿"""Hand-designed behavioural stress checks.
+"""Hand-designed behavioural stress checks.
 
 Translated from ``validation/validate_stress_cases.m``.
 

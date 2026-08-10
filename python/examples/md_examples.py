@@ -57,7 +57,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 import viz
-from realtimecoin import RealTimeCOIN
+from realtimecoin import RealTimeCOIN, RealTimeCOINEnsemble
 
 plt.rcParams["figure.max_open_warning"] = 0
 
@@ -707,96 +707,94 @@ print("Isotropic contexts: %d;  Correlated contexts: %d"
 #
 # `RealTimeCOINEnsemble` wraps R independent N-dimensional `RealTimeCOIN`
 # filters fed the same vector-valued feedback and returns their equal-weight
-# average. `simulate` batch-replays every run (across worker processes when
-# `max_cores > 0`) and returns the per-trial run-averaged `motor_output`
-# (N-by-T) plus the pooled `state_mean` / `state_var`; context-aligned averages
-# (responsibilities, per-context densities) work exactly as in the scalar
-# notebook. Here a 2-D A/B/A recall schedule is run over 30 members.
+# average. `simulate` batch-replays every run and returns the per-trial
+# run-averaged `motor_output` (N-by-T) plus the pooled `state_mean` /
+# `state_var`; context-aligned averages (responsibilities, per-context
+# densities) work exactly as in the scalar notebook. Here a 2-D A/B/A recall
+# schedule is run over 8 members at 50 particles -- modest sizes, chosen so the
+# full-size notebook stays within a few minutes (the schedule is replayed
+# twice, once batched and once stepped); only the Monte-Carlo error depends on
+# R, as 1/sqrt(R).
 #
-# The context-indexed ensemble queries are Phase 2 of the ensemble work, so they
-# are guarded: until they land the cell reports "phase 2 pending" and still
-# runs.
+# `max_cores > 0` would dispatch the runs across worker processes,
+# bit-identically. This cell keeps the serial default: on Windows and macOS
+# `multiprocessing` spawns workers by re-importing the launching module, which a
+# cell-mode script or notebook cannot guard with `if __name__ == "__main__":`.
+# In an ordinary script, put the `simulate` call under that guard and set
+# `max_cores`.
 
 # %%
-try:
-    from realtimecoin import RealTimeCOINEnsemble
-except ImportError:
-    print("RealTimeCOINEnsemble pending (unit D1) - skipping section 11")
-else:
-    def trace(traces, name):
-        """Read a named trace out of simulate()'s result.
+def trace(traces, name):
+    """Read a named trace out of simulate()'s result.
 
-        The ensemble may return the traces as a mapping or as a small record
-        object; both are handled so this cell does not care which.
-        """
-        value = traces[name] if hasattr(traces, "keys") else getattr(traces, name)
-        return np.asarray(value, dtype=float)
+    The ensemble may return the traces as a mapping or as a small record
+    object; both are handled so this cell does not care which.
+    """
+    value = traces[name] if hasattr(traces, "keys") else getattr(traces, name)
+    return np.asarray(value, dtype=float)
 
-    data_rng = np.random.default_rng(21)
-    N = 2
-    tgt_a = np.array([0.4, -0.3])
-    tgt_b = np.array([-0.35, 0.25])
-    block_len = nt(30, 8)
-    targets_seq = np.concatenate(
-        [np.repeat(tgt_a[:, None], block_len, axis=1),
-         np.repeat(tgt_b[:, None], block_len, axis=1),
-         np.repeat(tgt_a[:, None], block_len, axis=1)], axis=1)
-    cues = np.concatenate([np.ones(block_len), 2 * np.ones(block_len),
-                           np.ones(block_len)]).astype(int)
-    T = targets_seq.shape[1]
-    obs = targets_seq + 0.03 * data_rng.standard_normal((N, T))
+data_rng = np.random.default_rng(21)
+N = 2
+tgt_a = np.array([0.4, -0.3])
+tgt_b = np.array([-0.35, 0.25])
+block_len = nt(30, 8)
+targets_seq = np.concatenate(
+    [np.repeat(tgt_a[:, None], block_len, axis=1),
+     np.repeat(tgt_b[:, None], block_len, axis=1),
+     np.repeat(tgt_a[:, None], block_len, axis=1)], axis=1)
+cues = np.concatenate([np.ones(block_len), 2 * np.ones(block_len),
+                       np.ones(block_len)]).astype(int)
+T = targets_seq.shape[1]
+obs = targets_seq + 0.03 * data_rng.standard_normal((N, T))
 
-    # Batch replay across runs (parallel when max_cores > 0).
-    n_runs = nruns(30)
-    ens = RealTimeCOINEnsemble(runs=n_runs, seed=3, max_cores=8, state_dim=N,
-                               max_contexts=4, num_particles=npart(100))
-    tr = ens.simulate(cues, obs)
-    print("Ensemble (MD): runs = %d, motor trace = %s"
-          % (n_runs, trace(tr, "motor_output").shape))
-    viz.trajectory_2d(trace(tr, "motor_output"), np.column_stack([tgt_a, tgt_b]),
-                      fig_name="Ensemble MD: run-averaged trajectory",
-                      title="Run-averaged motor_output (%d runs)" % n_runs,
-                      observed_xy=obs)
+# Batch replay across runs (serial; see the note above on max_cores).
+n_runs = nruns(8)
+ens = RealTimeCOINEnsemble(runs=n_runs, seed=3, max_cores=0, state_dim=N,
+                           max_contexts=4, num_particles=npart(50))
+tr = ens.simulate(cues, obs)
+print("Ensemble (MD): runs = %d, motor trace = %s"
+      % (n_runs, trace(tr, "motor_output").shape))
+viz.trajectory_2d(trace(tr, "motor_output"), np.column_stack([tgt_a, tgt_b]),
+                  fig_name="Ensemble MD: run-averaged trajectory",
+                  title="Run-averaged motor_output (%d runs)" % n_runs,
+                  observed_xy=obs)
 
-    # Live stepping, to read the ensemble summaries at the final trial.
-    ens_live = RealTimeCOINEnsemble(runs=n_runs, seed=3, state_dim=N,
-                                    max_contexts=4, num_particles=npart(100))
-    for t in range(T):
-        ens_live.observe_q(cues[t])
-        ens_live.observe_y(obs[:, t])
-    mu_e, cov_e = ens_live.state_moments()
-    print("Pooled state mean = [%+.3f %+.3f]" % (mu_e[0], mu_e[1]))
-    print("Pooled state covariance:")
-    print(np.round(cov_e, 6))
+# Live stepping, to read the ensemble summaries at the final trial.
+ens_live = RealTimeCOINEnsemble(runs=n_runs, seed=3, state_dim=N,
+                                max_contexts=4, num_particles=npart(50))
+for t in range(T):
+    ens_live.observe_q(cues[t])
+    ens_live.observe_y(obs[:, t])
+mu_e, cov_e = ens_live.state_moments()
+print("Pooled state mean = [%+.3f %+.3f]" % (mu_e[0], mu_e[1]))
+print("Pooled state covariance:")
+print(np.round(cov_e, 6))
 
-    try:
-        resp = ens_live.responsibilities_vector()
-        print("Run-averaged responsibilities: [%s] (sum %.3f)"
-              % (" ".join("%.2f" % v for v in resp), resp.sum()))
+resp = ens_live.responsibilities_vector()
+print("Run-averaged responsibilities: [%s] (sum %.3f)"
+      % (" ".join("%.2f" % v for v in resp), resp.sum()))
 
-        # Per-context 2-D state density (reference frame), averaged over runs.
-        gx = np.linspace(-0.8, 0.8, ngrid(61, 21))
-        GX, GY = np.meshgrid(gx, gx)
-        grid_pts = np.column_stack([GX.ravel(), GY.ravel()])   # one point per ROW
-        dmap = ens_live.state_given_context_probability(grid_pts)
-        ctx_keys = sorted(dmap)
-        fig = viz.new_figure("Ensemble MD: per-context state density",
-                             figsize=(4.0 * max(len(ctx_keys), 1), 4.0))
-        axes = fig.subplots(1, max(len(ctx_keys), 1), squeeze=False)[0]
-        for i, key in enumerate(ctx_keys):
-            ax = axes[i]
-            im = ax.imshow(np.asarray(dmap[key], float).reshape(GX.shape),
-                           extent=(gx[0], gx[-1], gx[0], gx[-1]),
-                           origin="lower", aspect="equal", cmap="viridis")
-            fig.colorbar(im, ax=ax)
-            ax.set_title("context %d" % key)
-            ax.set_xlabel("dim 1")
-            ax.set_ylabel("dim 2")
-        fig.suptitle("Run-averaged state_given_context_probability "
-                     "(reference frame)")
-        fig.tight_layout()
-    except NotImplementedError:
-        print("Ensemble context-aligned summaries are phase 2 pending.")
+# Per-context 2-D state density (reference frame), averaged over runs.
+gx = np.linspace(-0.8, 0.8, ngrid(61, 21))
+GX, GY = np.meshgrid(gx, gx)
+grid_pts = np.column_stack([GX.ravel(), GY.ravel()])   # one point per ROW
+dmap = ens_live.state_given_context_probability(grid_pts)
+ctx_keys = sorted(dmap)
+fig = viz.new_figure("Ensemble MD: per-context state density",
+                     figsize=(4.0 * max(len(ctx_keys), 1), 4.0))
+axes = fig.subplots(1, max(len(ctx_keys), 1), squeeze=False)[0]
+for i, key in enumerate(ctx_keys):
+    ax = axes[i]
+    im = ax.imshow(np.asarray(dmap[key], float).reshape(GX.shape),
+                   extent=(gx[0], gx[-1], gx[0], gx[-1]),
+                   origin="lower", aspect="equal", cmap="viridis")
+    fig.colorbar(im, ax=ax)
+    ax.set_title("context %d" % key)
+    ax.set_xlabel("dim 1")
+    ax.set_ylabel("dim 2")
+fig.suptitle("Run-averaged state_given_context_probability "
+             "(reference frame)")
+fig.tight_layout()
 
 # %% [markdown]
 # ## Wrap-up

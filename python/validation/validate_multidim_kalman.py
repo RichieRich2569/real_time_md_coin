@@ -36,6 +36,7 @@ from scipy.stats import chi2
 from realtimecoin import RealTimeCOIN
 
 from .kalman_reference import kalman_reference_step
+from .pass_summary import pass_summary
 from .uniform_ks import uniform_ks
 
 __all__ = [
@@ -65,36 +66,6 @@ THRESHOLDS = {
 
 _A = 0.82
 _DRIFT = 0.035
-
-
-def _pass_summary(checks):
-    """Aggregate named checks into one overall pass flag.
-
-    Local stand-in for ``validation_pass_summary.m``; see
-    :func:`validation.validate_single_context_kalman._pass_summary`.
-
-    Parameters
-    ----------
-    checks : dict
-        ``{name: bool or float or None}``; ``None`` marks a skipped check.
-
-    Returns
-    -------
-    passed : bool
-        True when every non-skipped check holds.
-    checks : dict
-        The same mapping with numeric entries coerced to ``bool``.
-    """
-    out = {}
-    passed = True
-    for name, value in checks.items():
-        if value is None:
-            out[name] = None
-            continue
-        ok = bool(value) and bool(np.isfinite(float(value)))
-        out[name] = ok
-        passed = passed and ok
-    return passed, out
 
 
 def _noise_covariances(n):
@@ -251,7 +222,7 @@ def run(seed=0, strict=False, **overrides):
     var_rel_error = float(np.median(var_rel))
     feedback_ks = uniform_ks(rt_pit)
 
-    passed, checks = _pass_summary(
+    passed, checks = pass_summary(
         {
             "mean_rmse": mean_rmse < THRESHOLDS["mean_rmse"],
             "variance_relative_error": (

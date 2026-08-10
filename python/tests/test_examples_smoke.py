@@ -11,8 +11,9 @@ The scripts are slow even in fast mode (the filter costs milliseconds per
 particle per trial), so everything here is marked ``slow``; run it with
 ``pytest -m slow`` or as part of a full ``pytest tests/``.
 
-Both scripts guard their ensemble sections behind ``ImportError``, so this test
-passes whether or not ``RealTimeCOINEnsemble`` is present.
+Both scripts exercise ``RealTimeCOINEnsemble`` unconditionally, including its
+cross-run context-aligned queries, so this test covers the ensemble surface end
+to end as well.
 """
 
 from __future__ import annotations

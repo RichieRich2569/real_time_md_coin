@@ -840,7 +840,7 @@ invariance. It is a one-shot batch on its own fresh member set: it does not
 disturb the live stepping state of `ens`, and calling it twice gives identical
 traces.
 
-### 8.5 Context-indexed queries (Phase 2)
+### 8.5 Context-indexed queries (Phase 2, cross-run aligned)
 
 Context-indexed readouts cannot be averaged slot-by-slot, because each member
 labels its contexts in its own member-local global frame. Phase 2 adds a
@@ -851,7 +851,7 @@ distance. Every member's novel context always maps to the reference novel slot.
 The alignment is deterministic, so it inherits reproducibility and executor
 invariance.
 
-These six queries are **Phase 2**:
+These six queries are aligned before averaging:
 
 | Method | Averaging rule in the reference frame |
 | --- | --- |
@@ -866,6 +866,15 @@ The two rules differ for a reason: a run that lacks reference context `j` has
 *zero* posterior probability on it (so it contributes 0 to a probability
 vector), but has *no* density for it (undefined, not zero -- so it is omitted
 from a density average).
+
+One caveat on SPEC 10.5.3's member-order invariance. The reference *labels* are
+the reference member's own labels, so the readout is order-invariant only **up
+to a relabelling**: if two members tie for the most contexts, reordering them
+can hand the frame to the other one and permute the output. With
+`argmax_r K_r` unique the readout is invariant outright -- and in practice all
+members see one shared observation stream, so they order their contexts alike.
+The MATLAB original has exactly the same property (both pick the first
+maximiser).
 
 ---
 
@@ -893,7 +902,7 @@ exact values.
 | `single_context_kalman` | `validate_single_context_kalman` | with one context, very precise dynamics priors and `max_contexts=1`, the scalar model must reduce to a textbook Kalman filter. Compares production predictive moments against the analytic recursion, plus a PIT | `mean_rmse < 0.05`, `variance_relative_error < 0.35`, `feedback_ks < 0.15` |
 | `multidim_kalman` | `validate_multidim_kalman` | the same reduction for the MD model, with **correlated** `Q` and `R` so the matrix gain and the Cholesky likelihood are genuinely exercised. Calibration via a chi-square-`N` Mahalanobis PIT | `mean_rmse < 0.05`, `variance_relative_error < 0.35`, `feedback_ks < 0.15` |
 | `p_values_extended` | `validate_p_values_extended` | PIT self-calibration on a 2-context HMM stream: the feedback PIT and the randomised discrete cue PIT should be Uniform(0, 1); state and parameter ranks are reported as posterior diagnostics | `feedback_ks < 0.08`, `cue_ks < 0.08`, `state_rank_ks < 0.15` |
-| `original_coin_monte_carlo` | -- | comparison against the offline `COIN.m` oracle. Reported as **skipped** (it carries `skipped=True` and does not gate the suite), because there is no Python `COIN.m` | -- |
+| `original_coin_monte_carlo` | `validate_original_coin_monte_carlo` | comparison against the offline `COIN.m` oracle, by replaying the frozen MATLAB traces in `tests/fixtures/oracle/` (there is no Python `COIN.m`). With no fixtures present it reports `skipped=True` and does not gate | `mean_rmse < 0.03`, `worst_correlation > 0.95` |
 | `particle_convergence` | `validate_particle_convergence` | Monte-Carlo error should shrink roughly like `1/sqrt(P)` as the particle count grows, and runtime should grow. The oracle-RMSE arm is fixture-gated: absent fixtures make it `None` (skipped), not a failure | `best_feedback_ks < 0.12`, `best_rmse < 0.05` (when fixtures exist), runtime ratio, calibration-or-RMSE improves |
 | `context_recovery` | `validate_context_recovery` | recovery of known latent contexts from a synthetic 2-context stream, scored *after* finding the best label permutation. Averaged over several seeds, because the accuracy sits close to its gate | `context_accuracy > 0.65`, `posterior_true_context > 0.45`, `mean_recovery_lag <= 20` |
 | `stress_cases` | `validate_stress_cases` | interpretable qualitative probes: stable data must not proliferate contexts, an abrupt change must create one, A-B-A data should reuse an old context, `max_contexts` must be honoured, higher sensory noise must increase posterior uncertainty | mean context count `<= 1.5` on stable data; abrupt-change max context count `>= 1.5`; capped max context count `<= 2`; high/low-noise state-variance ratio `> 1.25` |
