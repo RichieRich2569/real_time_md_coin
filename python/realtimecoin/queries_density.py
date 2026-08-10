@@ -166,7 +166,8 @@ def _scalar_grid(values, name):
     numpy.ndarray
         ``(K,)`` query points.
     """
-    return _finite_grid(values, name).reshape(-1)
+    # MATLAB's values(:) is a column-major flatten; keep the same point order.
+    return _finite_grid(values, name).reshape(-1, order="F")
 
 
 def _novel_slot_particles(model):

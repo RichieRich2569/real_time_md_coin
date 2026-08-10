@@ -564,7 +564,9 @@ def mixture_density_on_grid(
     num_particles, num_contexts = weights.shape
 
     if state_dim == 1:
-        values = np.asarray(values, dtype=float).reshape(-1)
+        # MATLAB's values(:) is a column-major flatten; match it so a matrix
+        # grid enumerates points in the same order as every density query.
+        values = np.asarray(values, dtype=float).reshape(-1, order="F")
         densities = np.zeros(values.shape)
         for p in range(num_particles):
             for c in range(num_contexts):

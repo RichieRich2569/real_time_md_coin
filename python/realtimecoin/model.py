@@ -936,7 +936,8 @@ class RealTimeCOIN:
         ----------
         q : float or None
             RAW cue value. A value never observed is treated as the next novel
-            label (carrying zero mass) WITHOUT registering it. ``None`` returns
+            label - the trailing novel-cue column, which carries the novel-cue
+            stick's mass, NOT zero - WITHOUT registering it. ``None`` returns
             ``nan``.
         u : float or None, optional
             Uniform variate in [0, 1]. ``None`` draws one from ``self.rng``,
