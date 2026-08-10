@@ -846,8 +846,6 @@ def test_query_stubs_name_their_owning_unit(make_model):
     m = make_model(num_particles=2, max_contexts=2)
     for call, unit in [
         (lambda: m.state_probability([0.0, 1.0]), "unit C2"),
-        (m.snapshot, "unit C1"),
-        (m.set_stationary, "unit C1"),
     ]:
         with pytest.raises(NotImplementedError, match=unit):
             call()
