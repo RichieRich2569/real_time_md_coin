@@ -1,7 +1,46 @@
-"""Real-time COIN motor-learning model (Python translation of @RealTimeCOIN).
+"""Real-time COIN motor-learning model (Python translation of ``@RealTimeCOIN``).
 
-This placeholder only marks the package; a later unit re-exports the public
-API (the model class and its query methods) from here.
+The COntextual INference model of Heald, Lengyel & Wolpert (2021), run as a
+state machine: :meth:`~realtimecoin.model.RealTimeCOIN.observe_q` stages the cue
+for the upcoming trial, :meth:`~realtimecoin.model.RealTimeCOIN.observe_y`
+processes the feedback and advances the trial, and the query methods expose the
+current posterior and predictive summaries.
+
+Examples
+--------
+>>> from realtimecoin import RealTimeCOIN
+>>> model = RealTimeCOIN(num_particles=50, rng=0)
+>>> model.Trial
+0
 """
 
+from .exceptions import (
+    BiasNotInferredError,
+    ModelFormatError,
+    NameValuePairsError,
+    NoCuesError,
+    RealTimeCOINError,
+    ScalarModelOnlyError,
+)
+from .model import RealTimeCOIN
+from .state import ParticleState
+
 __version__ = "0.1.0"
+
+__all__ = [
+    "RealTimeCOIN",
+    "ParticleState",
+    "RealTimeCOINError",
+    "NoCuesError",
+    "BiasNotInferredError",
+    "ScalarModelOnlyError",
+    "NameValuePairsError",
+    "ModelFormatError",
+]
+
+try:   # Optional: the ensemble wrapper arrives in a later translation unit.
+    from .ensemble import RealTimeCOINEnsemble   # noqa: F401  (re-exported below)
+except ImportError:   # pragma: no cover - module not written yet
+    pass
+else:
+    __all__.append("RealTimeCOINEnsemble")
