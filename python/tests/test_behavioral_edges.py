@@ -87,9 +87,9 @@ def test_context_cap_and_matrix_shapes_survive_streaming():
     )
     assert model.cue_values == [99.0, 42.0]
 
-    with _skipping_pending_units("unit B3 (alignment)"):
-        diag = model.diagnostics()
-        assert np.all(diag["n_active"] <= model.max_contexts)
+    diag = model.diagnostics()
+    assert np.all(diag["raw"].n_active <= model.max_contexts)
+    assert diag["C"] <= model.max_contexts
 
 
 def test_observe_y_without_a_cue_leaves_the_cue_registry_empty():
