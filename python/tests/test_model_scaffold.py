@@ -821,15 +821,18 @@ def test_observe_y_md_accepts_an_empty_observation(make_model):
 
 
 def test_query_stubs_name_their_owning_unit(make_model):
-    """Each facade delegate reaches the module that will implement it."""
+    """Each still-stubbed facade delegate reaches the module that will own it.
+
+    Entries drop off this list as their unit lands; the aligned context queries
+    (``responsibilities_vector``, ``context_alignment``, ...) left it when unit
+    B3 was implemented and are covered by ``test_global_alignment.py`` instead.
+    """
     m = make_model(num_particles=2, max_contexts=2)
     for call, unit in [
         (m.motor_output, "unit B1"),
         (m.state_moments, "unit B1"),
         (m.predicted_context_probabilities_local, "unit B1"),
         (lambda: m.state_probability([0.0, 1.0]), "unit C2"),
-        (m.responsibilities_vector, "unit B3"),
-        (m.context_alignment, "unit B3"),
         (m.snapshot, "unit C1"),
         (m.set_stationary, "unit C1"),
     ]:

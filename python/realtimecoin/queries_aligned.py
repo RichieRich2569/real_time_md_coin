@@ -1,14 +1,12 @@
 """Context-facing queries that require the global context alignment.
 
-STUB MODULE - implemented by unit B3.
-
 Translated from the public methods ``predicted_context_probabilities_vector``,
 ``predicted_context_probabilities_map``, ``responsibilities_vector``,
 ``responsibilities_map``, ``sampled_context_count``,
 ``stationary_context_probabilities``, ``global_transition_probabilities``,
 ``global_cue_probabilities``, ``local_transition_probabilities``,
-``local_cue_probabilities``, ``context_alignment``, ``diagnostics``,
-``state_given_context_probability`` and
+``local_cue_probabilities``, ``context_alignment``, ``diagnostics``
+(+ ``private/diagnosticsMD``), ``state_given_context_probability`` and
 ``state_feedback_given_context_probability``.
 
 Every function here calls ``ensure_context_alignment``, so each one TRIGGERS
@@ -21,10 +19,29 @@ and therefore need the alignment; the marginal densities do not.
 
 Maps are returned as plain Python ``dict`` objects keyed by the integer global
 context label, standing in for MATLAB's ``containers.Map``. Keys are the
-0-based global labels, and only contexts with strictly positive weight appear.
+0-BASED global labels - one less than the MATLAB key for the same context -
+so that ``some_map[c]`` and ``some_vector[c]`` always name the same context.
+Only contexts with strictly positive weight appear.
 """
 
 from __future__ import annotations
+
+import numpy as np
+
+from .alignment import (
+    clamp_active_summary_contexts,
+    context_probability_vector,
+    ensure_context_alignment,
+    global_context_matrix,
+    global_context_weights,
+    global_cue_tensor,
+    global_sampled_contexts,
+    global_transition_tensor,
+)
+from .exceptions import NoCuesError
+from .numerics import gaussian_pdf_columns_md, renormalize_global_weights
+from .state import feedback_transform, observation_noise_cov
+from .statics import normal_pdf, stationary_distribution
 
 __all__ = [
     "predicted_context_probabilities_vector",
@@ -44,7 +61,42 @@ __all__ = [
     "state_feedback_given_context_probability",
 ]
 
-_UNIT = "implemented by unit B3"
+#: Per-context fields of the scalar diagnostics that share one relabelling.
+#: Each name matches its raw ``ParticleState`` field, so one table drives them
+#: all (as in ``diagnostics.m``).
+_SCALAR_MATRIX_FIELDS = (
+    "state_mean",
+    "state_var",
+    "state_feedback_mean",
+    "state_feedback_var",
+    "retention",
+    "drift",
+    "bias",
+    "global_transition_probabilities",
+)
+
+
+def _positive_entry_map(weights):
+    """Turn a weight vector into a ``{label: weight}`` dict of positive entries.
+
+    The Python stand-in for MATLAB's ``containers.Map`` construction loop in
+    ``predicted_context_probabilities_map`` / ``responsibilities_map``.
+
+    Parameters
+    ----------
+    weights : array_like
+        Per-global-context weights.
+
+    Returns
+    -------
+    dict
+        ``{0-based global context label: weight}``, strictly positive entries
+        only.
+    """
+    weights = np.asarray(weights, dtype=float).reshape(-1)
+    return {
+        int(c): float(w) for c, w in enumerate(weights) if w > 0
+    }
 
 
 def predicted_context_probabilities_vector(model):
@@ -63,7 +115,7 @@ def predicted_context_probabilities_vector(model):
     numpy.ndarray
         ``(max_contexts + 1,)`` probabilities.
     """
-    raise NotImplementedError(_UNIT)
+    return context_probability_vector(model, "predicted")
 
 
 def predicted_context_probabilities_map(model):
@@ -80,9 +132,9 @@ def predicted_context_probabilities_map(model):
     Returns
     -------
     dict
-        ``{global_context_label: probability}``.
+        ``{0-based global context label: probability}``.
     """
-    raise NotImplementedError(_UNIT)
+    return _positive_entry_map(context_probability_vector(model, "predicted"))
 
 
 def responsibilities_vector(model):
@@ -101,7 +153,7 @@ def responsibilities_vector(model):
     numpy.ndarray
         ``(max_contexts + 1,)`` responsibilities.
     """
-    raise NotImplementedError(_UNIT)
+    return context_probability_vector(model, "responsibilities")
 
 
 def responsibilities_map(model):
@@ -115,16 +167,20 @@ def responsibilities_map(model):
     Returns
     -------
     dict
-        ``{global_context_label: responsibility}``, positive entries only.
+        ``{0-based global context label: responsibility}``, positive entries
+        only.
     """
-    raise NotImplementedError(_UNIT)
+    return _positive_entry_map(context_probability_vector(model, "responsibilities"))
 
 
 def sampled_context_count(model):
     """Sampled-context occupancy across particles, normalised to sum to one.
 
-    The fraction of particles whose sampled context for the current trial equals
-    each aligned global context; the trailing entry is the novel context.
+    The fraction of MODAL particles whose sampled context for the current trial
+    equals each aligned global context; the trailing entry is the novel context.
+    Particles whose sampled context has no global label contribute to the
+    denominator but to no bin, so the raw counts can sum to less than one before
+    the final renormalisation.
 
     Parameters
     ----------
@@ -136,7 +192,7 @@ def sampled_context_count(model):
     numpy.ndarray
         ``(max_contexts + 1,)`` frequencies.
     """
-    raise NotImplementedError(_UNIT)
+    return context_probability_vector(model, "count")
 
 
 def stationary_context_probabilities(model):
@@ -144,8 +200,8 @@ def stationary_context_probabilities(model):
 
     Mirrors COIN's ``plot_stationary_probabilities``: the novel-context column
     is dropped and each row renormalised to form a stochastic matrix over the
-    instantiated contexts before solving for its stationary distribution.
-    Dimension-independent.
+    instantiated contexts before solving for its stationary distribution. A row
+    left with no mass falls back to uniform. Dimension-independent.
 
     Parameters
     ----------
@@ -156,9 +212,21 @@ def stationary_context_probabilities(model):
     -------
     numpy.ndarray
         ``(K,)`` stationary probabilities, ``K`` being the aligned context
-        count.
+        count; empty when ``K == 0``.
     """
-    raise NotImplementedError(_UNIT)
+    alignment = ensure_context_alignment(model)
+    k = int(alignment["K"])
+    if k == 0:
+        return np.zeros(0)
+    # Copy: the alignment prototypes are cached and must not be renormalised.
+    t = np.array(
+        alignment["global_contexts"]["transition_prob"][:k, :k], dtype=float
+    )                                                    # (K, K)
+    row_sum = t.sum(axis=1)                              # (K,)
+    zero_rows = row_sum <= 0
+    t[~zero_rows] = t[~zero_rows] / row_sum[~zero_rows][:, None]
+    t[zero_rows] = 1.0 / k                               # uniform fallback
+    return stationary_distribution(t)
 
 
 def global_transition_probabilities(model):
@@ -179,14 +247,19 @@ def global_transition_probabilities(model):
     numpy.ndarray
         ``(max_contexts + 1,)`` franchise weights.
     """
-    raise NotImplementedError(_UNIT)
+    alignment = ensure_context_alignment(model)
+    wg = global_context_weights(
+        model, model.D.global_transition_probabilities, alignment
+    )                                       # (P_modal, C)
+    return renormalize_global_weights(np.mean(wg, axis=0))
 
 
 def global_cue_probabilities(model):
     """Expected global (franchise) cue distribution.
 
-    Averaged over particles. Cue labels are numbered by order of presentation,
-    so they need no alignment; the trailing entry is the novel-cue stick.
+    Averaged over ALL particles (not just the modal ones). Cue labels are
+    numbered by order of presentation, so they need no alignment; the trailing
+    entry is the novel-cue stick.
 
     Parameters
     ----------
@@ -203,7 +276,14 @@ def global_cue_probabilities(model):
     NoCuesError
         If no sensory cue has been observed yet.
     """
-    raise NotImplementedError(_UNIT)
+    if not model.cue_values:
+        raise NoCuesError(
+            "global_cue_probabilities requires the model to have observed "
+            "sensory cues."
+        )
+    return renormalize_global_weights(
+        np.mean(model.D.global_cue_probabilities, axis=0)
+    )
 
 
 def local_transition_probabilities(model):
@@ -221,9 +301,14 @@ def local_transition_probabilities(model):
     Returns
     -------
     numpy.ndarray
-        ``(K, K + 1)`` transition probabilities.
+        ``(K, K + 1)`` transition probabilities (a copy; the cached prototypes
+        are not exposed for mutation).
     """
-    raise NotImplementedError(_UNIT)
+    alignment = ensure_context_alignment(model)
+    k = int(alignment["K"])
+    return np.array(
+        alignment["global_contexts"]["transition_prob"][:k, : k + 1], dtype=float
+    )
 
 
 def local_cue_probabilities(model):
@@ -240,14 +325,23 @@ def local_cue_probabilities(model):
     Returns
     -------
     numpy.ndarray
-        ``(K, Q)`` cue-emission probabilities.
+        ``(K, Q)`` cue-emission probabilities (a copy).
 
     Raises
     ------
     NoCuesError
         If no sensory cue has been observed yet.
     """
-    raise NotImplementedError(_UNIT)
+    if not model.cue_values:
+        raise NoCuesError(
+            "local_cue_probabilities requires the model to have observed "
+            "sensory cues."
+        )
+    alignment = ensure_context_alignment(model)
+    k = int(alignment["K"])
+    return np.array(
+        alignment["global_contexts"]["cue_prob"][:k, :], dtype=float
+    )
 
 
 def context_alignment(model):
@@ -257,7 +351,7 @@ def context_alignment(model):
     context labels onto one globally consistent labelling for the current
     trial. Computed lazily and cached; the cache is invalidated by each
     ``observe_y``, so repeated context-facing queries within a trial share one
-    alignment.
+    alignment (and get back the very same object).
 
     Parameters
     ----------
@@ -270,7 +364,7 @@ def context_alignment(model):
         The alignment structure; see
         :func:`realtimecoin.alignment.compute_context_alignment` for the keys.
     """
-    raise NotImplementedError(_UNIT)
+    return ensure_context_alignment(model)
 
 
 def diagnostics(model):
@@ -279,6 +373,10 @@ def diagnostics(model):
     A structure summarising every per-context quantity of the current trial,
     relabelled into the aligned global-context frame. Delegates to
     :func:`diagnostics_md` when ``state_dim > 1``.
+
+    Note the layout transposition relative to MATLAB: the per-particle arrays
+    here have the MODAL PARTICLE axis LEADING, so ``S["responsibilities"]`` is
+    ``(P_modal, C)`` where MATLAB's is ``(Cmax, nModal)``.
 
     Parameters
     ----------
@@ -296,11 +394,47 @@ def diagnostics(model):
         ``global_cue_probabilities``, ``local_cue_matrix``, ``alignment`` and
         ``raw`` (a reference to the raw particle state).
     """
-    raise NotImplementedError(_UNIT)
+    if model.state_dim > 1:
+        return diagnostics_md(model)
+
+    alignment = ensure_context_alignment(model)
+    d = model.D
+    modal_idx = np.asarray(
+        alignment["modal_particle_indices"], dtype=int
+    ).reshape(-1)
+
+    s = {
+        "trial": model.trial,
+        "C": int(alignment["K"]),
+        "context": global_sampled_contexts(model, alignment),
+        "predicted_probabilities": global_context_weights(
+            model, d.predicted_probabilities, alignment
+        ),
+        "responsibilities": global_context_weights(
+            model, d.responsibilities, alignment
+        ),
+    }
+    for name in _SCALAR_MATRIX_FIELDS:
+        s[name] = global_context_matrix(model, getattr(d, name), alignment)
+
+    s["local_transition_matrix"] = global_transition_tensor(
+        model, d.local_transition_matrix, alignment
+    )
+    s["global_cue_probabilities"] = d.global_cue_probabilities[modal_idx, :]
+    s["local_cue_matrix"] = global_cue_tensor(model, d.local_cue_matrix, alignment)
+    s["alignment"] = alignment
+    s["raw"] = model.D
+    return s
 
 
 def diagnostics_md(model):
     """Multi-dimensional counterpart of :func:`diagnostics`.
+
+    Per-context dynamics are reported as the augmented matrix
+    ``Theta = [A | d]`` split into the retention matrices ``A`` and the drift
+    vectors, alongside the filtered state mean/covariance and the (optional)
+    observation bias. Context probabilities reuse the dimension-agnostic
+    global-weight machinery.
 
     Parameters
     ----------
@@ -310,17 +444,109 @@ def diagnostics_md(model):
     Returns
     -------
     dict
-        The MD diagnostic structure (matrix-valued state and dynamics fields in
-        place of their scalar counterparts).
+        ``trial``, ``K``, ``A`` ``(K, N, N)``, ``drift`` ``(K, N)``, ``bias``
+        ``(K, N)``, ``state_mean`` ``(K, N)``, ``state_cov`` ``(K, N, N)``,
+        ``predicted_probabilities`` / ``responsibilities`` ``(K,)``,
+        ``predicted_probabilities_particles`` /
+        ``responsibilities_particles`` ``(P_modal, C)``, ``context``
+        ``(P_modal,)``, ``transition_prob`` ``(K, K + 1)``, ``cue_prob``
+        ``(K, Q)``, ``alignment`` and ``raw``.
     """
-    raise NotImplementedError(_UNIT)
+    n = model.state_dim
+    alignment = ensure_context_alignment(model)
+    proto = alignment["global_contexts"]
+    km = int(alignment["K"])
+    d = model.D
+
+    theta = np.asarray(proto["theta_mean"], dtype=float)   # (K, N, N + 1)
+    w_pred = global_context_weights(model, d.predicted_probabilities, alignment)
+    w_resp = global_context_weights(model, d.responsibilities, alignment)
+
+    return {
+        "trial": model.trial,
+        "K": km,
+        # Per-context dynamics: split Theta = [A | d].
+        "A": theta[:, :, :n].copy(),                       # (K, N, N)
+        "drift": theta[:, :, n].copy(),                    # (K, N)
+        "bias": np.array(proto["bias_mean"], dtype=float),
+        "state_mean": np.array(proto["state_mean"], dtype=float),
+        "state_cov": np.array(proto["state_cov"], dtype=float),
+        # Context probabilities (aligned across the modal particles).
+        "predicted_probabilities_particles": w_pred,       # (P_modal, C)
+        "responsibilities_particles": w_resp,
+        "predicted_probabilities": np.mean(w_pred[:, :km], axis=0),   # (K,)
+        "responsibilities": np.mean(w_resp[:, :km], axis=0),          # (K,)
+        "context": global_sampled_contexts(model, alignment),
+        "transition_prob": np.array(proto["transition_prob"], dtype=float),
+        "cue_prob": np.array(proto["cue_prob"], dtype=float),
+        "alignment": alignment,
+        "raw": model.D,
+    }
+
+
+def _validate_grid(model, values, name):
+    """Validate and normalise a per-context density query grid.
+
+    Layout note: the MATLAB originals take an ``N``-by-``K_pts`` array whose
+    COLUMNS are the query points; following this package's convention the grid
+    is ``(K_pts,)`` for the scalar model and ``(K_pts, N)`` - one query point
+    per ROW - for the multi-dimensional model.
+
+    Parameters
+    ----------
+    model : RealTimeCOIN
+        Model supplying ``state_dim``.
+    values : array_like
+        The caller's grid.
+    name : str
+        Query name, quoted in the error message.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(K_pts,)`` for the scalar model, ``(K_pts, N)`` otherwise.
+
+    Raises
+    ------
+    ValueError
+        If the grid is not finite/real (``RealTimeCOIN:GridNotFinite``) or has
+        the wrong trailing dimension
+        (``RealTimeCOIN:GridDimensionMismatch``).
+    """
+    values = np.asarray(values, dtype=float)
+    if not np.all(np.isfinite(values)):
+        raise ValueError(
+            "RealTimeCOIN:GridNotFinite: %s expects a finite, real grid." % name
+        )
+
+    n = model.state_dim
+    if n == 1:
+        if values.ndim == 2 and 1 in values.shape:
+            return values.reshape(-1)
+        if values.ndim > 1:
+            raise ValueError(
+                "RealTimeCOIN:GridDimensionMismatch: %s expects a (K,) grid "
+                "for state_dim == 1; received an array of shape %r."
+                % (name, values.shape)
+            )
+        return values.reshape(-1)
+
+    values = np.atleast_2d(values)
+    if values.ndim != 2 or values.shape[1] != n:
+        raise ValueError(
+            "RealTimeCOIN:GridDimensionMismatch: %s expects a (K, %d) grid "
+            "(one query point per row) for state_dim == %d; received an array "
+            "of shape %r." % (name, n, n, values.shape)
+        )
+    return values
 
 
 def state_given_context_probability(model, values):
     """Per-context posterior latent-state density on a grid.
 
     Uses the aligned global-context prototype moments, so the keys are stable
-    global labels.
+    global labels. Only the ACTIVE summary contexts (those with strictly
+    positive predicted probability, clamped to the aligned label set) appear.
 
     Parameters
     ----------
@@ -333,10 +559,27 @@ def state_given_context_probability(model, values):
     Returns
     -------
     dict
-        ``{global_context_label: numpy.ndarray}``, each value a
+        ``{0-based global context label: numpy.ndarray}``, each value a
         ``(K_pts,)`` density.
     """
-    raise NotImplementedError(_UNIT)
+    grid = _validate_grid(model, values, "state_given_context_probability")
+    alignment = ensure_context_alignment(model)
+    proto = alignment["global_contexts"]
+    active = clamp_active_summary_contexts(model, alignment)
+
+    densities = {}
+    if model.state_dim == 1:
+        mean = proto["state_mean"]           # (K,)
+        var = proto["state_var"]             # (K,)
+        for c in active:
+            densities[int(c)] = normal_pdf(grid, mean[c], var[c])
+        return densities
+
+    mean = proto["state_mean"]               # (K, N)
+    cov = proto["state_cov"]                 # (K, N, N)
+    for c in active:
+        densities[int(c)] = gaussian_pdf_columns_md(grid, mean[c], cov[c])
+    return densities
 
 
 def state_feedback_given_context_probability(model, values):
@@ -344,7 +587,15 @@ def state_feedback_given_context_probability(model, values):
 
     Observation-space counterpart of
     :func:`state_given_context_probability`: the mean is shifted by the learned
-    observation bias and the covariance inflated by the observation noise ``R``.
+    observation bias and the covariance inflated by the observation noise.
+
+    .. note::
+       The scalar branch inflates by ``sigma_sensory_noise ** 2`` ALONE, not by
+       the full ``observation_variance`` (which also carries the motor-noise
+       term), whereas the multi-dimensional branch uses the full
+       ``observation_noise_cov``. That asymmetry is carried over verbatim from
+       ``state_feedback_given_context_probability.m``; the two agree whenever
+       ``sigma_motor_noise == 0`` (the default).
 
     Parameters
     ----------
@@ -356,7 +607,32 @@ def state_feedback_given_context_probability(model, values):
     Returns
     -------
     dict
-        ``{global_context_label: numpy.ndarray}``, each value a
+        ``{0-based global context label: numpy.ndarray}``, each value a
         ``(K_pts,)`` density.
     """
-    raise NotImplementedError(_UNIT)
+    grid = _validate_grid(
+        model, values, "state_feedback_given_context_probability"
+    )
+    alignment = ensure_context_alignment(model)
+    proto = alignment["global_contexts"]
+    active = clamp_active_summary_contexts(model, alignment)
+
+    densities = {}
+    if model.state_dim == 1:
+        mean = proto["state_mean"]           # (K,)
+        var = proto["state_var"]             # (K,)
+        bias = proto["bias_mean"]            # (K,)
+        r = model.sigma_sensory_noise ** 2
+        for c in active:
+            m, v = feedback_transform(mean[c], var[c], bias[c], r)
+            densities[int(c)] = normal_pdf(grid, m, v)
+        return densities
+
+    mean = proto["state_mean"]               # (K, N)
+    cov = proto["state_cov"]                 # (K, N, N)
+    bias = proto["bias_mean"]                # (K, N)
+    r = observation_noise_cov(model)         # (N, N)
+    for c in active:
+        m, v = feedback_transform(mean[c], cov[c], bias[c], r)
+        densities[int(c)] = gaussian_pdf_columns_md(grid, m, v)
+    return densities
