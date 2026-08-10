@@ -775,12 +775,19 @@ def test_observe_y_scalar_runs_the_b1_pipeline(make_model):
     assert np.isfinite(m.motor_output())
 
 
-def test_observe_y_md_reaches_the_b2_stub(make_model):
-    """The multi-dimensional pipeline is unit B2's."""
+def test_observe_y_md_runs_the_b2_pipeline(make_model):
+    """The multi-dimensional pipeline is unit B2's - and it is implemented.
+
+    Was ``test_observe_y_md_reaches_the_b2_stub``: it pinned the
+    ``NotImplementedError`` while ``pipeline_md`` was a stub. Now that B2 has
+    landed the same dispatch is asserted through its effect - the MD path runs
+    end to end and advances the trial.
+    """
     m = make_model(num_particles=3, max_contexts=2, state_dim=2)
-    with pytest.raises(NotImplementedError, match="unit B2"):
-        m.observe_y([0.5, -0.25])
-    assert m.Trial == 0
+    m.observe_y([0.5, -0.25])
+    assert m.Trial == 1
+    assert m.D.state_filtered_mean.shape == (3, 3, 2)
+    assert np.all(np.isfinite(m.D.state_filtered_mean))
 
 
 def test_observe_y_consumes_the_pending_cue(make_model):
@@ -814,11 +821,19 @@ def test_observe_y_missing_observation_still_runs_the_pipeline(make_model):
 
 
 def test_observe_y_md_accepts_an_empty_observation(make_model):
-    """An empty y on the MD path is a fully-unobserved trial, not an error."""
+    """An empty y on the MD path is a fully-unobserved trial, not an error.
+
+    Updated by unit B2: previously this pinned the ``pipeline_md`` stub error;
+    now it checks the behaviour the stub stood in for - the trial runs, the
+    counter advances, and with nothing observed the filtered moments are exactly
+    the predicted ones.
+    """
     m = make_model(num_particles=2, max_contexts=2, state_dim=3)
-    for missing in (None, [], np.array([])):
-        with pytest.raises(NotImplementedError, match="unit B2"):
-            m.observe_y(missing)
+    for i, missing in enumerate((None, [], np.array([]))):
+        m.observe_y(missing)
+        assert m.Trial == i + 1
+        np.testing.assert_array_equal(m.D.state_filtered_mean, m.D.state_mean)
+        np.testing.assert_array_equal(m.D.state_filtered_cov, m.D.state_cov)
 
 
 def test_query_stubs_name_their_owning_unit(make_model):
