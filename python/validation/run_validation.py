@@ -184,7 +184,6 @@ def run(profile="compact", seed=DEFAULT_SEED, strict=False, make_plots=False):
         trials=suite["kalman_trials"],
         particles=suite["kalman_particles"],
         seed=seed + STAGE_SEED_OFFSETS["single_context_kalman"],
-        make_plots=make_plots,
         strict=False,
     )
     results["multidim_kalman"] = _c3_stage(
@@ -194,7 +193,6 @@ def run(profile="compact", seed=DEFAULT_SEED, strict=False, make_plots=False):
         particles=suite["kalman_particles"],
         dim=2,
         seed=seed + STAGE_SEED_OFFSETS["multidim_kalman"],
-        make_plots=make_plots,
         strict=False,
     )
     results["p_values_extended"] = _run_stage(
@@ -224,7 +222,7 @@ def run(profile="compact", seed=DEFAULT_SEED, strict=False, make_plots=False):
         "validate_particle_convergence",
         particles=suite["convergence_particles"],
         trials=suite["convergence_trials"],
-        num_datasets=suite["convergence_datasets"],
+        datasets=suite["convergence_datasets"],
         seed=seed + STAGE_SEED_OFFSETS["particle_convergence"],
         strict=False,
     )
