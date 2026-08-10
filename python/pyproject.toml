@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "realtimecoin"
+version = "0.1.0"
+description = "Real-time (sequential) COIN motor-learning model, translated from MATLAB"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["realtimecoin*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests that take a long time to run",
+    "validation: marks scientific validation tests against the MATLAB reference",
+    "statistical: marks seeded statistical tests (moments, KS goodness-of-fit)",
+]
