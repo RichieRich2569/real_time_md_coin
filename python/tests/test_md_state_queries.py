@@ -194,6 +194,23 @@ def test_md_predictive_cdf_rejects_a_mis_sized_y(md_model):
         md_model.predictive_state_feedback_cdf([0.0, 0.0, 0.0], 1.0)
 
 
+@pytest.mark.parametrize("bad", [np.inf, -np.inf, np.nan])
+def test_predictive_cdf_rejects_a_non_finite_y(md_model, bad):
+    """``mustBeFinite`` on ``y`` is enforced rather than silently clamped.
+
+    Without the check the fmin/fmax clamp would quietly turn ``inf`` into 1.0
+    and ``nan`` into 0.0 - a plausible-looking probability from nonsense input.
+    """
+    with pytest.raises(ValueError, match="RealTimeCOIN:FeedbackNotFinite"):
+        md_model.predictive_state_feedback_cdf([bad, 0.0], 1.0)
+
+
+def test_scalar_predictive_cdf_rejects_a_non_finite_y(scalar_model):
+    """The same guard applies on the scalar path."""
+    with pytest.raises(ValueError, match="RealTimeCOIN:FeedbackNotFinite"):
+        scalar_model.predictive_state_feedback_cdf(np.nan, 1.0)
+
+
 # ----------------------------------------------------------------------
 # Scalar re-checks (the unchanged path)
 # ----------------------------------------------------------------------

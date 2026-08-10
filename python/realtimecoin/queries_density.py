@@ -35,6 +35,27 @@ single most important thing to preserve here):
 Every function here is read-only and consumes no randomness, with the single
 documented exception of :func:`predictive_cue_p_value`, which draws its uniform
 variate from ``model.rng`` when ``u`` is not supplied.
+
+Two known, deliberate deviations from the MATLAB sources
+--------------------------------------------------------
+1. **Grid flatten order.** MATLAB's ``values = values(:)'`` is a COLUMN-major
+   flatten and its ``values (:, :) double`` signature accepts a matrix; the
+   scalar path here (and in
+   :func:`realtimecoin.numerics.mixture_density_on_grid`, which backs four of
+   these queries) flattens ROW-major. For the documented ``(K,)`` scalar grid the
+   two are identical - they differ only for an out-of-contract matrix grid on a
+   scalar model, where the returned densities are a permutation of MATLAB's.
+   The row-major choice is kept for consistency with the rest of the package
+   rather than fixed here in isolation, which would leave
+   ``bias_probability`` disagreeing with ``state_probability``.
+2. **Raw-cue validators.** ``predictive_state_feedback_cdf.m`` and
+   ``predictive_cue_p_value.m`` declare
+   ``q double {mustBeScalarOrEmpty, mustBeInteger, mustBeFinite,
+   mustBeNonnegative}``, but ``observe_q.m``, ``state_cstar2.m`` and
+   ``kalman_gain_cstar2.m`` do not - MATLAB is internally inconsistent about it.
+   This package accepts any raw cue value everywhere (as
+   :func:`realtimecoin.queries_core.predictive_motor_output` already does), so
+   the validators are not re-imposed on these two entry points alone.
 """
 
 from __future__ import annotations
@@ -443,8 +464,10 @@ def retention_given_context_probability(model, values):
         multi-dimensional counterpart (the MD model stores a dynamics matrix).
     """
     name = "retention_given_context_probability"
-    _must_be_scalar_model(model, name)
+    # Grid first: MATLAB validates `values` in the arguments block, i.e. before
+    # `mustBeScalarModel` runs in the body.
     grid = _scalar_grid(values, name)
+    _must_be_scalar_model(model, name)
     # dynamics = [retention; drift]; entry 0 is the retention factor.
     return _per_context_normal_map(
         model,
@@ -480,8 +503,8 @@ def drift_given_context_probability(model, values):
         If ``state_dim > 1``.
     """
     name = "drift_given_context_probability"
+    grid = _scalar_grid(values, name)          # arguments-block order, as above
     _must_be_scalar_model(model, name)
-    grid = _scalar_grid(values, name)
     # dynamics = [retention; drift]; entry 1 is the drift.
     return _per_context_normal_map(
         model,
@@ -520,10 +543,10 @@ def bias_given_context_probability(model, values):
         covariance.
     """
     name = "bias_given_context_probability"
+    grid = _scalar_grid(values, name)          # arguments-block order, as above
     _must_be_scalar_model(model, name)
     if not model.infer_bias:
         raise BiasNotInferredError("%s requires infer_bias == True." % name)
-    grid = _scalar_grid(values, name)
     return _per_context_normal_map(
         model,
         grid,
@@ -568,10 +591,10 @@ def bias_probability(model, values):
         If ``state_dim > 1``.
     """
     name = "bias_probability"
+    grid = _scalar_grid(values, name)          # arguments-block order, as above
     _must_be_scalar_model(model, name)
     if not model.infer_bias:
         raise BiasNotInferredError("%s requires infer_bias == True." % name)
-    grid = _scalar_grid(values, name)
 
     weights = model.D.predicted_probabilities                        # (P, C)
     densities = np.zeros(grid.shape)                                 # (K,)
@@ -617,17 +640,28 @@ def predictive_state_feedback_cdf(model, y, q=None):
     Raises
     ------
     ValueError
-        If ``y`` does not have ``state_dim`` elements
+        If ``y`` is not finite and real (``RealTimeCOIN:FeedbackNotFinite``), or
+        does not have ``state_dim`` elements
         (``RealTimeCOIN:FeedbackDimensionMismatch``).
     """
+    # `y` is validated first, mirroring MATLAB, where `y (:, 1) double
+    # {mustBeFinite, mustBeReal}` is checked in the arguments block before the
+    # body resolves the cue. Without it an infinite y would silently clamp to
+    # 1.0 and a nan to 0.0 through the fmin/fmax below.
+    n = model.state_dim
+    y = np.asarray(y, dtype=float).reshape(-1)                       # (N,)
+    if not np.all(np.isfinite(y)):
+        raise ValueError(
+            "RealTimeCOIN:FeedbackNotFinite: predictive_state_feedback_cdf "
+            "expects a finite, real y."
+        )
+
     # The preview helpers take a cue LABEL and never consult pending_q, so the
     # pending raw cue is resolved here (predictive_state_feedback_cdf.m:18-21).
     if q is None:
         q = model.pending_q
     q_label = peek_cue_label(model, q)          # read-only: registers nothing
 
-    n = model.state_dim
-    y = np.asarray(y, dtype=float).reshape(-1)                       # (N,)
     if y.size != n:
         raise ValueError(
             "RealTimeCOIN:FeedbackDimensionMismatch: predictive_state_feedback_cdf "

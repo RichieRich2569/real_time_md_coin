@@ -262,6 +262,24 @@ def test_scalar_only_queries_reject_the_multi_dimensional_model(md_model):
             call()
 
 
+def test_grid_validation_precedes_the_model_guards(md_model):
+    """A bad grid is reported before the scalar-model / bias guards.
+
+    MATLAB validates ``values`` in the ``arguments`` block, so it runs before
+    ``mustBeScalarModel`` and the ``infer_bias`` test in the body. An MD model
+    handed a non-finite grid must therefore report the GRID problem.
+    """
+    bad = np.array([0.0, np.nan])
+    for name in (
+        "retention_given_context_probability",
+        "drift_given_context_probability",
+        "bias_given_context_probability",
+        "bias_probability",
+    ):
+        with pytest.raises(ValueError, match="RealTimeCOIN:GridNotFinite"):
+            getattr(md_model, name)(bad)
+
+
 def test_scalar_model_check_precedes_the_bias_inference_check(md_model):
     """``bias_probability`` reports the dimension problem first, as MATLAB does.
 
