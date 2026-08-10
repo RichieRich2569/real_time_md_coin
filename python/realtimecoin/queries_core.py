@@ -1,7 +1,5 @@
 """Point-prediction and moment queries, plus the fast local-label summaries.
 
-STUB MODULE - implemented by unit B1.
-
 Translated from the public methods ``motor_output``,
 ``predictive_motor_output``, ``state_moments``, ``predictive_feedback_moments``,
 ``explicit_component``, ``implicit_component``, ``state_cstar1/2/3``,
@@ -17,9 +15,41 @@ alignment cache either). All of them work for both the scalar and the
 multi-dimensional model unless the docstring says otherwise; the Kalman-gain
 queries are scalar-only, because the MD gain is a matrix with no scalar
 counterpart.
+
+Two ``q`` conventions coexist here, inherited from the MATLAB sources and
+deliberately preserved:
+
+* ``predictive_motor_output``, ``state_cstar2`` and ``kalman_gain_cstar2`` take
+  a RAW cue value and resolve it through
+  :func:`realtimecoin.state.peek_cue_label`;
+* ``predictive_feedback_moments``, :func:`preview_predictive_feedback` and
+  :func:`preview_predictive_feedback_md` take a 0-based cue LABEL, which they
+  use to index ``D.local_cue_matrix`` directly (clamped to the last column).
+
+In BOTH conventions ``None`` marginalises the cue out at the point of use; the
+raw-value entry points additionally substitute ``model.pending_q`` first, so a
+cue staged by ``observe_q`` is honoured.
 """
 
 from __future__ import annotations
+
+import numpy as np
+
+from .context import next_trial_context_weights
+from .exceptions import ScalarModelOnlyError
+from .numerics import (
+    stationary_state_cov_md,
+    stationary_state_mean,
+    stationary_state_mean_md,
+    stationary_state_var,
+)
+from .state import (
+    EPS,
+    observation_noise_cov,
+    observation_variance,
+    peek_cue_label,
+    process_noise_cov,
+)
 
 __all__ = [
     "motor_output",
@@ -43,7 +73,142 @@ __all__ = [
     "scalar_kalman_gains",
 ]
 
-_UNIT = "implemented by unit B1"
+
+# --------------------------------------------------------------------------
+# Internal helpers
+# --------------------------------------------------------------------------
+
+
+def _must_be_scalar_model(model, method_name):
+    """Raise unless the model is scalar (``state_dim == 1``).
+
+    Translation of ``private/mustBeScalarModel.m``. The message keeps the
+    MATLAB wording so a caller matching on the identifier or on the text sees
+    the same string.
+
+    Parameters
+    ----------
+    model : RealTimeCOIN
+        Model to check.
+    method_name : str
+        Name reported in the error message.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ScalarModelOnlyError
+        If ``model.state_dim != 1``.
+    """
+    if model.state_dim != 1:
+        raise ScalarModelOnlyError(
+            "%s is only defined for the scalar model (state_dim == 1); "
+            "state_dim == %d." % (method_name, model.state_dim)
+        )
+
+
+def _resolve_raw_cue(model, q):
+    """0-based cue label for a RAW cue value, defaulting to the pending cue.
+
+    Parameters
+    ----------
+    model : RealTimeCOIN
+        Model whose ``pending_q`` and cue registry are read (never mutated).
+    q : float or None
+        Raw cue value; ``None`` falls back to ``model.pending_q``.
+
+    Returns
+    -------
+    int or None
+        0-based cue label, or ``None`` when there is no cue to resolve.
+    """
+    if q is None:
+        q = model.pending_q
+    return peek_cue_label(model, q)
+
+
+def _drop_zero_weight(weights, terms):
+    """Zero out mixture terms whose weight is exactly zero.
+
+    The multi-dimensional reductions in ``motor_output.m``, ``state_moments.m``
+    and ``predictive_feedback_moments.m`` all guard their accumulation with
+    ``if w ~= 0 ... end``. That guard is not cosmetic: an unused context slot can
+    legitimately carry a non-finite mean or covariance, and ``0 * inf`` would
+    poison the sum. The vectorised form reproduces it by masking rather than by
+    multiplying.
+
+    Parameters
+    ----------
+    weights : numpy.ndarray
+        ``(P, C)`` mixture weights.
+    terms : numpy.ndarray
+        Array whose two leading axes are ``(P, C)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``terms`` with every zero-weight component replaced by zero.
+    """
+    keep = weights != 0.0                                               # (P, C)
+    return np.where(
+        keep.reshape(keep.shape + (1,) * (terms.ndim - keep.ndim)), terms, 0.0
+    )
+
+
+def _select_context_state_mean(model, idx):
+    """Particle-average of ``D.state_mean`` at a per-particle context choice.
+
+    Translation of ``private/selectContextStateMean.m``.
+
+    Parameters
+    ----------
+    model : RealTimeCOIN
+        Model whose particle state is read.
+    idx : array_like
+        ``(P,)`` 0-based context label selected for each particle.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
+    """
+    d = model.D
+    particles = np.arange(model.num_particles)
+    idx = np.asarray(idx).reshape(-1)
+    if model.state_dim == 1:
+        return float(np.mean(d.state_mean[particles, idx]))
+    # (P, N) gather, then average across particles.
+    return np.mean(d.state_mean[particles, idx, :], axis=0)              # (N,)
+
+
+def _weights_for_label(model, q_label):
+    """Next-trial context weights, optionally tilted by a cue LABEL.
+
+    Thin alias for :func:`realtimecoin.context.next_trial_context_weights`; kept
+    so the preview helpers read like their MATLAB counterparts, which spell the
+    same expression out inline.
+
+    Parameters
+    ----------
+    model : RealTimeCOIN
+        Model whose particle state is read.
+    q_label : int or None
+        0-based cue label, clamped to the last instantiated column; ``None``
+        marginalises the cue out.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(P, C)`` normalised context weights.
+    """
+    return next_trial_context_weights(model, q_label)
+
+
+# --------------------------------------------------------------------------
+# Point predictions and moments
+# --------------------------------------------------------------------------
 
 
 def motor_output(model):
@@ -65,7 +230,15 @@ def motor_output(model):
     float or numpy.ndarray
         A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
     """
-    raise NotImplementedError(_UNIT)
+    d = model.D
+    w = d.predicted_probabilities                                       # (P, C)
+    if model.state_dim == 1:
+        return float(np.sum(w * d.state_feedback_mean) / model.num_particles)
+    # (P, C, 1) * (P, C, N) summed over particles and contexts, with the
+    # zero-weight components dropped exactly as the MATLAB loop drops them.
+    means = _drop_zero_weight(w, d.state_feedback_mean)               # (P, C, N)
+    total = np.sum(w[:, :, None] * means, axis=(0, 1))                  # (N,)
+    return total / model.num_particles
 
 
 def predictive_motor_output(model, q=None):
@@ -90,7 +263,12 @@ def predictive_motor_output(model, q=None):
     float or numpy.ndarray
         A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
     """
-    raise NotImplementedError(_UNIT)
+    q_label = _resolve_raw_cue(model, q)
+    if model.state_dim > 1:
+        mu, _sigma = predictive_feedback_moments(model, q_label)
+        return mu
+    w, m, _v = preview_predictive_feedback(model, q_label)
+    return float(np.sum(w * m) / model.num_particles)
 
 
 def state_moments(model):
@@ -114,7 +292,32 @@ def state_moments(model):
     v : float or numpy.ndarray
         Scalar variance, or an ``(N, N)`` covariance matrix.
     """
-    raise NotImplementedError(_UNIT)
+    d = model.D
+    p_count = model.num_particles
+    w = d.predicted_probabilities                                       # (P, C)
+
+    if model.state_dim == 1:
+        mu = float(np.sum(w * d.state_mean) / p_count)
+        second = float(
+            np.sum(w * (d.state_var + d.state_mean ** 2)) / p_count
+        )
+        # fmax, not maximum: MATLAB's max(x, 0) drops a NaN in favour of 0.
+        return mu, float(np.fmax(second - mu ** 2, 0.0))
+
+    # state_moments.m:38 divides by P BEFORE its `if w == 0, continue` test, so
+    # the mask is built from the scaled weights (motor_output.m:34 tests the
+    # unscaled weight - the difference is unreachable, but it is transcribed).
+    weights = w / p_count                                               # (P, C)
+    means = _drop_zero_weight(weights, d.state_mean)                 # (P, C, N)
+    covs = _drop_zero_weight(weights, d.state_cov)                # (P, C, N, N)
+    mu = np.sum(weights[:, :, None] * means, axis=(0, 1))               # (N,)
+    # Per-component second moment V_k + m_k m_k', weighted and summed.
+    outer = means[:, :, :, None] * means[:, :, None, :]                 # (P,C,N,N)
+    second = np.sum(
+        weights[:, :, None, None] * (covs + outer), axis=(0, 1)
+    )                                                                   # (N, N)
+    v = second - np.outer(mu, mu)                                       # (N, N)
+    return mu, (v + v.T) / 2.0
 
 
 def predictive_feedback_moments(model, q=None):
@@ -141,7 +344,96 @@ def predictive_feedback_moments(model, q=None):
     sigma : float or numpy.ndarray
         Scalar variance, or an ``(N, N)`` covariance matrix.
     """
-    raise NotImplementedError(_UNIT)
+    weights = _weights_for_label(model, q)                              # (P, C)
+    if model.state_dim == 1:
+        return _scalar_moments(model, weights)
+    return _multi_moments(model, weights)
+
+
+def _scalar_moments(model, weights):
+    """One-step predictive feedback moments for the scalar model.
+
+    Parameters
+    ----------
+    model : RealTimeCOIN
+        Model whose particle state is read.
+    weights : numpy.ndarray
+        ``(P, C)`` context mixture weights.
+
+    Returns
+    -------
+    mu : float
+        Predictive feedback mean.
+    v : float
+        Predictive feedback variance.
+
+    Notes
+    -----
+    The novel-slot fallback is written exactly as ``predictive_feedback_moments.m``
+    writes it - ``d / max(1 - a, eps)`` and ``sigma^2 / max(1 - a^2, eps)`` -
+    rather than through :func:`realtimecoin.numerics.stationary_state_mean`,
+    which returns 0 instead of a huge value when ``a`` is within ``eps`` of 1.
+    The two agree everywhere except in that (unreachable for a truncated
+    ``a in [0, 1 - eps]``) corner; keeping the MATLAB form makes this function a
+    literal transliteration.
+    """
+    d = model.D
+    p_count = model.num_particles
+    state_mean = d.retention * d.state_filtered_mean + d.drift          # (P, C)
+    state_var = (
+        d.retention ** 2 * d.state_filtered_var + model.sigma_process_noise ** 2
+    )                                                                   # (P, C)
+
+    rows = np.nonzero(d.n_active < model.max_contexts)[0]
+    if rows.size:
+        cols = d.n_active[rows]
+        a = d.retention[rows, cols]
+        drift = d.drift[rows, cols]
+        state_mean[rows, cols] = drift / np.fmax(1.0 - a, EPS)
+        state_var[rows, cols] = model.sigma_process_noise ** 2 / np.fmax(
+            1.0 - a ** 2, EPS
+        )
+
+    feedback_mean = state_mean + d.bias                                 # (P, C)
+    feedback_var = state_var + observation_variance(model)              # (P, C)
+
+    mu = float(np.sum(weights * feedback_mean) / p_count)
+    second = float(
+        np.sum(weights * (feedback_var + feedback_mean ** 2)) / p_count
+    )
+    return mu, float(np.fmax(second - mu ** 2, 0.0))
+
+
+def _multi_moments(model, weights):
+    """One-step predictive feedback moments for the multi-dimensional model.
+
+    Parameters
+    ----------
+    model : RealTimeCOIN
+        Model whose particle state is read.
+    weights : numpy.ndarray
+        ``(P, C)`` context mixture weights.
+
+    Returns
+    -------
+    mu : numpy.ndarray
+        ``(N,)`` predictive feedback mean.
+    sigma : numpy.ndarray
+        ``(N, N)`` predictive feedback covariance.
+    """
+    p_count = model.num_particles
+    w, m, cov = preview_predictive_feedback_md(model, None, weights=weights)
+    # As in state_moments: predictive_feedback_moments.m:86 tests w / P == 0.
+    scaled = w / p_count                                                # (P, C)
+    m = _drop_zero_weight(scaled, m)                                 # (P, C, N)
+    cov = _drop_zero_weight(scaled, cov)                          # (P, C, N, N)
+    mu = np.sum(scaled[:, :, None] * m, axis=(0, 1))                    # (N,)
+    outer = m[:, :, :, None] * m[:, :, None, :]                      # (P, C, N, N)
+    second = np.sum(
+        scaled[:, :, None, None] * (cov + outer), axis=(0, 1)
+    )                                                                   # (N, N)
+    sigma = second - np.outer(mu, mu)                                    # (N, N)
+    return mu, (sigma + sigma.T) / 2.0
 
 
 def explicit_component(model):
@@ -162,7 +454,13 @@ def explicit_component(model):
     float or numpy.ndarray
         A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
     """
-    raise NotImplementedError(_UNIT)
+    if model.trial <= 1:
+        # Before/at the first feedback the responsibilities are uninformative,
+        # so their argmax is arbitrary; COIN falls back to context 0.
+        idx = np.zeros(model.num_particles, dtype=int)                  # (P,)
+    else:
+        idx = np.argmax(model.D.responsibilities, axis=-1)              # (P,)
+    return _select_context_state_mean(model, idx)
 
 
 def implicit_component(model):
@@ -182,7 +480,8 @@ def implicit_component(model):
     float or numpy.ndarray
         A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
     """
-    raise NotImplementedError(_UNIT)
+    mu, _v = state_moments(model)
+    return motor_output(model) - mu
 
 
 def state_cstar1(model):
@@ -202,7 +501,8 @@ def state_cstar1(model):
     float or numpy.ndarray
         A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
     """
-    raise NotImplementedError(_UNIT)
+    idx = np.argmax(model.D.responsibilities, axis=-1)                  # (P,)
+    return _select_context_state_mean(model, idx)
 
 
 def state_cstar2(model, q=None):
@@ -225,7 +525,9 @@ def state_cstar2(model, q=None):
     float or numpy.ndarray
         A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
     """
-    raise NotImplementedError(_UNIT)
+    weights = _weights_for_label(model, _resolve_raw_cue(model, q))     # (P, C)
+    idx = np.argmax(weights, axis=-1)                                   # (P,)
+    return _select_context_state_mean(model, idx)
 
 
 def state_cstar3(model):
@@ -245,7 +547,8 @@ def state_cstar3(model):
     float or numpy.ndarray
         A scalar for ``state_dim == 1``, otherwise an ``(N,)`` vector.
     """
-    raise NotImplementedError(_UNIT)
+    idx = np.argmax(model.D.predicted_probabilities, axis=-1)           # (P,)
+    return _select_context_state_mean(model, idx)
 
 
 def predicted_probability_cstar1(model):
@@ -266,7 +569,10 @@ def predicted_probability_cstar1(model):
         A scalar in [0, 1], for both the scalar and MD models (context
         probabilities are dimension-independent).
     """
-    raise NotImplementedError(_UNIT)
+    d = model.D
+    particles = np.arange(model.num_particles)
+    idx = np.argmax(d.responsibilities, axis=-1)                        # (P,)
+    return float(np.mean(d.predicted_probabilities[particles, idx]))
 
 
 def predicted_probability_cstar3(model):
@@ -285,7 +591,7 @@ def predicted_probability_cstar3(model):
     float
         A scalar in [0, 1].
     """
-    raise NotImplementedError(_UNIT)
+    return float(np.mean(np.max(model.D.predicted_probabilities, axis=-1)))
 
 
 def kalman_gain_cstar1(model):
@@ -311,7 +617,11 @@ def kalman_gain_cstar1(model):
         If ``state_dim > 1``: the MD Kalman gain is a matrix and has no scalar
         counterpart.
     """
-    raise NotImplementedError(_UNIT)
+    _must_be_scalar_model(model, "kalman_gain_cstar1")
+    gains = scalar_kalman_gains(model)                                  # (P, C)
+    particles = np.arange(model.num_particles)
+    idx = np.argmax(model.D.responsibilities, axis=-1)                  # (P,)
+    return float(np.mean(gains[particles, idx]))
 
 
 def kalman_gain_cstar2(model, q=None):
@@ -338,7 +648,17 @@ def kalman_gain_cstar2(model, q=None):
     ScalarModelOnlyError
         If ``state_dim > 1``.
     """
-    raise NotImplementedError(_UNIT)
+    _must_be_scalar_model(model, "kalman_gain_cstar2")
+    weights = _weights_for_label(model, _resolve_raw_cue(model, q))     # (P, C)
+    gains = scalar_kalman_gains(model)                                  # (P, C)
+    particles = np.arange(model.num_particles)
+    idx = np.argmax(weights, axis=-1)                                   # (P,)
+    return float(np.mean(gains[particles, idx]))
+
+
+# --------------------------------------------------------------------------
+# Local-label (unaligned) context summaries
+# --------------------------------------------------------------------------
 
 
 def predicted_context_probabilities_local(model):
@@ -358,7 +678,9 @@ def predicted_context_probabilities_local(model):
     numpy.ndarray
         ``(max_contexts + 1,)`` weights summing to one, or all zeros.
     """
-    raise NotImplementedError(_UNIT)
+    from .context import local_context_probability_vector
+
+    return local_context_probability_vector(model, "predicted")
 
 
 def context_responsibilities_local(model):
@@ -377,7 +699,9 @@ def context_responsibilities_local(model):
     numpy.ndarray
         ``(max_contexts + 1,)`` weights summing to one, or all zeros.
     """
-    raise NotImplementedError(_UNIT)
+    from .context import local_context_probability_vector
+
+    return local_context_probability_vector(model, "responsibilities")
 
 
 def sampled_context_count_local(model):
@@ -396,7 +720,14 @@ def sampled_context_count_local(model):
     numpy.ndarray
         ``(max_contexts + 1,)`` frequencies summing to one, or all zeros.
     """
-    raise NotImplementedError(_UNIT)
+    from .context import local_context_probability_vector
+
+    return local_context_probability_vector(model, "count")
+
+
+# --------------------------------------------------------------------------
+# One-step-ahead previews
+# --------------------------------------------------------------------------
 
 
 def preview_predictive_feedback(model, q=None):
@@ -411,7 +742,11 @@ def preview_predictive_feedback(model, q=None):
     model : RealTimeCOIN
         Model whose particle state is read.
     q : int or None, optional
-        0-based cue label of the upcoming trial; ``None`` uses the pending cue.
+        0-based cue LABEL of the upcoming trial; ``None`` (the default)
+        marginalises the cue out. Matching ``previewPredictiveFeedback.m``, this
+        helper does NOT fall back to ``model.pending_q`` - its callers
+        (``predictive_motor_output``, the predictive CDF) resolve the pending
+        raw cue into a label themselves before calling.
 
     Returns
     -------
@@ -422,10 +757,32 @@ def preview_predictive_feedback(model, q=None):
     v : numpy.ndarray
         ``(P, C)`` per-component predictive feedback variances.
     """
-    raise NotImplementedError(_UNIT)
+    d = model.D
+    w = _weights_for_label(model, q)                                    # (P, C)
+
+    state_mean = d.retention * d.state_filtered_mean + d.drift          # (P, C)
+    state_var = (
+        d.retention ** 2 * d.state_filtered_var + model.sigma_process_noise ** 2
+    )                                                                   # (P, C)
+    # The novel slot has no filtered state yet: predict it from the stationary
+    # distribution of its AR(1) dynamics. Particles at the cap have no novel
+    # slot and are skipped.
+    rows = np.nonzero(d.n_active < model.max_contexts)[0]
+    if rows.size:
+        cols = d.n_active[rows]
+        state_mean[rows, cols] = stationary_state_mean(
+            d.retention[rows, cols], d.drift[rows, cols]
+        )
+        state_var[rows, cols] = stationary_state_var(
+            d.retention[rows, cols], model.sigma_process_noise
+        )
+
+    m = state_mean + d.bias                                             # (P, C)
+    v = state_var + observation_variance(model)                         # (P, C)
+    return w, m, v
 
 
-def preview_predictive_feedback_md(model, q=None):
+def preview_predictive_feedback_md(model, q=None, *, weights=None):
     """One-step-ahead predictive feedback mixture (MD model, read-only).
 
     Multi-dimensional counterpart of :func:`preview_predictive_feedback`.
@@ -435,7 +792,12 @@ def preview_predictive_feedback_md(model, q=None):
     model : RealTimeCOIN
         Model whose particle state is read.
     q : int or None, optional
-        0-based cue label of the upcoming trial; ``None`` uses the pending cue.
+        0-based cue LABEL of the upcoming trial; ``None`` marginalises the cue
+        out. As in the scalar helper, no fallback to ``model.pending_q``.
+    weights : numpy.ndarray or None, optional
+        Pre-computed ``(P, C)`` context weights, used instead of deriving them
+        from ``q``. Internal shortcut for :func:`predictive_feedback_moments`,
+        which has already built them; not part of the MATLAB signature.
 
     Returns
     -------
@@ -446,7 +808,34 @@ def preview_predictive_feedback_md(model, q=None):
     cov : numpy.ndarray
         ``(P, C, N, N)`` per-component predictive feedback covariances.
     """
-    raise NotImplementedError(_UNIT)
+    d = model.D
+    n = model.state_dim
+    c_slots = model.max_contexts + 1
+    p_count = model.num_particles
+    q_cov = process_noise_cov(model)                                    # (N, N)
+    r_cov = observation_noise_cov(model)                                # (N, N)
+
+    w = _weights_for_label(model, q) if weights is None else weights    # (P, C)
+
+    m = np.zeros((p_count, c_slots, n))                              # (P, C, N)
+    cov = np.zeros((p_count, c_slots, n, n))                      # (P, C, N, N)
+    for p in range(p_count):
+        # Novel slot (0-based); at the cap there is none, hence the guard below.
+        novel = min(int(d.n_active[p]), model.max_contexts)
+        for c in range(c_slots):
+            a_matrix = d.Theta[p, c, :, :n]                             # (N, N)
+            drift = d.Theta[p, c, :, n]                                 # (N,)
+            if c == novel and d.n_active[p] < model.max_contexts:
+                s_pred = stationary_state_mean_md(a_matrix, drift)      # (N,)
+                p_pred = stationary_state_cov_md(a_matrix, q_cov)       # (N, N)
+            else:
+                s_pred = a_matrix @ d.state_filtered_mean[p, c] + drift
+                p_pred = (
+                    a_matrix @ d.state_filtered_cov[p, c] @ a_matrix.T + q_cov
+                )
+            m[p, c] = s_pred + d.bias[p, c]
+            cov[p, c] = p_pred + r_cov
+    return w, m, cov
 
 
 def scalar_kalman_gains(model):
@@ -470,4 +859,10 @@ def scalar_kalman_gains(model):
     ScalarModelOnlyError
         If ``state_dim > 1``.
     """
-    raise NotImplementedError(_UNIT)
+    _must_be_scalar_model(model, "scalar_kalman_gains")
+    d = model.D
+    # Literal transliteration of `state_var ./ state_feedback_var`: MATLAB
+    # yields Inf/NaN on a zero denominator rather than guarding, and the callers
+    # average the result, so no guard is added here either.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return d.state_var / d.state_feedback_var                       # (P, C)

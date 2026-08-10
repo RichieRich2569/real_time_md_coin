@@ -761,17 +761,18 @@ def test_context_probability_vector_core_means():
 
 
 # ----------------------------------------------------------------------
-# observe_y reaches the (still stubbed) pipeline
+# observe_y reaches the pipeline (implemented for the scalar path, stubbed
+# for the multi-dimensional one)
 # ----------------------------------------------------------------------
 
 
-def test_observe_y_scalar_reaches_the_b1_stub(make_model):
-    """The scalar pipeline is unit B1's; the error must say so."""
+def test_observe_y_scalar_runs_the_b1_pipeline(make_model):
+    """The scalar pipeline is unit B1's and now runs end to end."""
     m = make_model(num_particles=3, max_contexts=2)
-    with pytest.raises(NotImplementedError, match="unit B1"):
-        m.observe_y(0.5)
-    # predict_context ran before the stub, and the trial did NOT advance.
-    assert m.Trial == 0
+    m.observe_y(0.5)
+    # The whole pipeline ran, so the trial advanced.
+    assert m.Trial == 1
+    assert np.isfinite(m.motor_output())
 
 
 def test_observe_y_md_reaches_the_b2_stub(make_model):
@@ -782,12 +783,11 @@ def test_observe_y_md_reaches_the_b2_stub(make_model):
     assert m.Trial == 0
 
 
-def test_observe_y_consumes_the_pending_cue_before_failing(make_model):
+def test_observe_y_consumes_the_pending_cue(make_model):
     """The cue is resolved before the pipeline runs, so it is consumed."""
     m = make_model(num_particles=3, max_contexts=2)
     m.observe_q(11)
-    with pytest.raises(NotImplementedError):
-        m.observe_y(0.1)
+    m.observe_y(0.1)
     assert m.pending_q is None
     assert m.cue_values == [11.0]
 
@@ -807,9 +807,10 @@ def test_observe_y_missing_observation_still_runs_the_pipeline(make_model):
     (isempty(y)), so an empty array must not be a size error.
     """
     m = make_model(num_particles=2, max_contexts=2)
-    for missing in (None, float("nan"), [], np.array([])):
-        with pytest.raises(NotImplementedError, match="unit B1"):
-            m.observe_y(missing)
+    for i, missing in enumerate((None, float("nan"), [], np.array([]))):
+        m.observe_y(missing)
+        assert m.Trial == i + 1
+    assert np.isfinite(m.motor_output())
 
 
 def test_observe_y_md_accepts_an_empty_observation(make_model):
@@ -821,12 +822,15 @@ def test_observe_y_md_accepts_an_empty_observation(make_model):
 
 
 def test_query_stubs_name_their_owning_unit(make_model):
-    """Each facade delegate reaches the module that will implement it."""
+    """Each facade delegate reaches the module that will implement it.
+
+    ``predicted_context_probabilities_local`` lives in unit B1's module but
+    selects the modal particles through unit B3's alignment helper, so it is the
+    B3 stub it currently reaches.
+    """
     m = make_model(num_particles=2, max_contexts=2)
     for call, unit in [
-        (m.motor_output, "unit B1"),
-        (m.state_moments, "unit B1"),
-        (m.predicted_context_probabilities_local, "unit B1"),
+        (m.predicted_context_probabilities_local, "unit B3"),
         (lambda: m.state_probability([0.0, 1.0]), "unit C2"),
         (m.responsibilities_vector, "unit B3"),
         (m.context_alignment, "unit B3"),
@@ -835,6 +839,14 @@ def test_query_stubs_name_their_owning_unit(make_model):
     ]:
         with pytest.raises(NotImplementedError, match=unit):
             call()
+
+
+def test_b1_queries_are_implemented(make_model):
+    """The unit B1 point-prediction queries no longer raise."""
+    m = make_model(num_particles=2, max_contexts=2)
+    assert np.isfinite(m.motor_output())
+    mu, v = m.state_moments()
+    assert np.isfinite(mu) and np.isfinite(v)
 
 
 def test_deprecated_aliases_are_not_ported(make_model):
