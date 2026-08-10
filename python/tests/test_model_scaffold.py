@@ -836,22 +836,6 @@ def test_observe_y_md_accepts_an_empty_observation(make_model):
         np.testing.assert_array_equal(m.D.state_filtered_cov, m.D.state_cov)
 
 
-def test_query_stubs_name_their_owning_unit(make_model):
-    """Each still-stubbed facade delegate reaches the module that will own it.
-
-    Entries drop off this list as their unit lands; the pipeline and aligned
-    context queries left it when units B1/B2/B3 were implemented and are
-    covered by their own test files instead.
-    """
-    m = make_model(num_particles=2, max_contexts=2)
-    for call, unit in [
-        (m.snapshot, "unit C1"),
-        (m.set_stationary, "unit C1"),
-    ]:
-        with pytest.raises(NotImplementedError, match=unit):
-            call()
-
-
 def test_b1_queries_are_implemented(make_model):
     """The unit B1 point-prediction queries no longer raise."""
     m = make_model(num_particles=2, max_contexts=2)
