@@ -26,11 +26,22 @@ Stage availability in this worktree
   reported as ``errored`` with ``error="pending unit C3 merge"`` and the rest of
   the suite still runs. ``particle_convergence`` is fixture-gated inside C3;
   whatever it reports is passed through unchanged.
-* ``original_coin_monte_carlo`` compares against the offline ``COIN.m`` oracle,
-  which needs frozen MATLAB fixtures (unit D2). It is reported as a SKIPPED
-  stage: it carries ``skipped=True`` and a ``skipped_reason``, and it does not
-  gate the suite (an unrun check is not evidence of failure, whereas an errored
-  one is).
+* ``original_coin_monte_carlo`` compares against the offline ``COIN.m`` oracle
+  by replaying frozen MATLAB traces (see
+  :mod:`validation.validate_original_coin_monte_carlo`). When those traces are
+  present the stage reports real metrics and gates the suite; when they are
+  absent the validator returns ``skipped=True`` with a ``skipped_reason`` and
+  the stage does not gate (an unrun check is not evidence of failure, whereas an
+  errored one is).
+
+Seed handling on the oracle stage
+---------------------------------
+The ``.m`` passes ``cfg.Seed + (30:34)`` to ``validate_original_coin_monte_carlo``
+because MATLAB re-runs ``COIN.m`` at each of those seeds. Python cannot generate
+new oracle traces, so the stage instead replays whichever frozen traces exist
+(``seeds=None``). The suite seed therefore does NOT select the oracle seeds; the
+seeds the ``.m`` would have used are still recorded in the stage's
+``matlab_equivalent_seeds`` entry for traceability.
 """
 
 from __future__ import annotations
@@ -50,6 +61,7 @@ if __package__ in (None, ""):        # pragma: no cover - direct-script launch
 from validation import (
     benchmark_realtimecoin,
     validate_context_recovery,
+    validate_original_coin_monte_carlo,
     validate_p_values_extended,
     validate_stress_cases,
 )
@@ -93,7 +105,10 @@ GATING_STAGES = (
     "stress_cases",
 )
 
-#: Reason recorded on the COIN.m-oracle stage that cannot run here.
+#: Retained for backwards compatibility with callers that imported it while the
+#: oracle stage was hardcoded as skipped. The stage now calls
+#: :func:`validation.validate_original_coin_monte_carlo.run`, which builds its
+#: own (more specific) reason string when the fixtures are absent.
 SKIPPED_REASON = "requires frozen MATLAB oracle fixtures (see unit D2)"
 
 #: Error recorded on a stage whose module has not been merged yet.
@@ -205,18 +220,24 @@ def run(profile="compact", seed=DEFAULT_SEED, strict=False, make_plots=False):
         make_plots=make_plots,
         strict=False,
     )
-    results["original_coin_monte_carlo"] = {
-        "passed": True,
-        "skipped": True,
-        "skipped_reason": SKIPPED_REASON,
-        # Recorded so the stage can be run verbatim once the fixtures exist.
-        "seeds": [
-            seed + STAGE_SEED_OFFSETS["original_coin_monte_carlo"] + i
-            for i in range(5)
-        ],
-        "trials": suite["original_trials"],
-        "particles": suite["original_particles"],
-    }
+    # seeds=None replays every frozen oracle trace present; the validator
+    # returns a skipped stub (passed=True, skipped=True) when there are none, so
+    # the fixture-absent fallback is preserved. trials/particles are passed as
+    # CROSS-CHECKS: the validator raises if the fixtures were captured at a
+    # different size, which would silently change what the gate measures.
+    results["original_coin_monte_carlo"] = _run_stage(
+        "original_coin_monte_carlo",
+        validate_original_coin_monte_carlo.run,
+        seeds=None,
+        trials=suite["original_trials"],
+        particles=suite["original_particles"],
+        strict=False,
+    )
+    # The seeds the .m would have generated on the fly, kept for traceability.
+    results["original_coin_monte_carlo"]["matlab_equivalent_seeds"] = [
+        seed + STAGE_SEED_OFFSETS["original_coin_monte_carlo"] + i
+        for i in range(5)
+    ]
     results["particle_convergence"] = _c3_stage(
         "particle_convergence",
         "validate_particle_convergence",
