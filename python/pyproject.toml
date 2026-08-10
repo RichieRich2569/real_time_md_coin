@@ -23,6 +23,9 @@ include = ["realtimecoin*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Make the validation/ namespace package importable when pytest is run from
+# python/ (it is excluded from the wheel, so it is not on sys.path otherwise).
+pythonpath = ["."]
 markers = [
     "slow: marks tests that take a long time to run",
     "validation: marks scientific validation tests against the MATLAB reference",
