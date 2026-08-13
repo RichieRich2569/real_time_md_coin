@@ -41,6 +41,10 @@ if exist(lightspeedDir, 'dir')
             lightspeedDir, buildErr.message);
     end
     cd(originalDir);
+else
+    warning('startup:LightspeedMissing', ...
+        "Dependency folder 'lightspeed' not found at '%s'; skipping its build (partial clone?).", ...
+        lightspeedDir);
 end
 
 if exist(npbayesDir, 'dir')
@@ -55,4 +59,8 @@ if exist(npbayesDir, 'dir')
             npbayesDir, buildErr.message);
     end
     cd(originalDir);
+else
+    warning('startup:NpbayesMissing', ...
+        "Dependency folder 'npbayes-r21' not found at '%s'; skipping its build (partial clone?).", ...
+        npbayesDir);
 end

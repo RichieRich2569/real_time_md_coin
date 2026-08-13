@@ -18,11 +18,7 @@ function [W, M, V] = previewPredictiveFeedback(obj, q)
     end
     Cmax = obj.max_contexts + 1;
     P = obj.num_particles;
-    prior = zeros(Cmax, P);
-    for p = 1:P
-        prior(:,p) = obj.D.local_transition_matrix(obj.D.context(p), :, p)';
-    end
-    prior = obj.normalizeColumns(prior);
+    prior = obj.currentTransitionPrior();
 
     if isempty(q)
         W = prior;

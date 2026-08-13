@@ -6,7 +6,7 @@ function [assignment, prototypes, converged, iter] = optimizeContextAlignment( .
 %   per-particle labelling stops changing:
 %     1. Assignment step - for each modal particle, build the local-to-global
 %        cost matrix (assignmentCostMatrix) and solve the resulting square
-%        min-cost matching (minAssignment) to relabel that particle's contexts.
+%        min-cost matching (linearAssignment) to relabel that particle's contexts.
 %     2. Prototype step - recompute the weighted global context prototypes
 %        (updateGlobalContexts) from the freshly relabelled particles.
 %   This is a hard-assignment EM-style fixed-point iteration; it is a reporting-
@@ -42,7 +42,7 @@ function [assignment, prototypes, converged, iter] = optimizeContextAlignment( .
             p = modalIdx(idx);
             cost = obj.assignmentCostMatrix(p, Km, prototypes, assignment, ...
                 includeTransition, prepared);
-            perm = obj.minAssignment(cost);
+            perm = linearAssignment(cost);
             assignment(:, p) = 0;
             assignment(1:Km, p) = perm(:);
             if Km < obj.max_contexts

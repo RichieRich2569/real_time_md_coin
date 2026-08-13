@@ -8,29 +8,7 @@ function [L, ok] = choljitter(~, S)
 %   succeeds. If even that fails (ok == false) we fall back to the diagonal
 %   square root so downstream code degrades gracefully instead of throwing.
 
-    S = (S + S') ./ 2;
-    [L, flag] = chol(S, 'lower');
-    if flag == 0
-        ok = true;
-        return;
-    end
-
-    scale = mean(diag(S));
-    if ~isfinite(scale) || scale <= 0
-        scale = 1;
-    end
-    jit = 1e-12 * scale;   % base jitter: 1e-12 relative to the mean diagonal
-    for k = 1:8
-        [L, flag] = chol(S + jit * eye(size(S)), 'lower');
-        if flag == 0
-            ok = true;
-            return;
-        end
-        jit = jit * 10;
-    end
-
-    % Last-resort diagonal fallback (independent dimensions).
-    d = max(diag(S), eps);
-    L = diag(sqrt(d));
-    ok = false;
+    % Delegate to the shared PD-repair utility; the "jitter" tactic is a verbatim
+    % copy of the escalating-diagonal-jitter body this function used to inline.
+    [L, ok] = ensurePD("jitter", S);
 end

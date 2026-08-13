@@ -184,13 +184,19 @@ Notation: **R** = properties read, **W** = properties written, **Calls** = priva
 
 | Method | Weights | Alignment? | Returns |
 |---|---|---|---|
-| `predicted_context_probabilities` | predicted | **yes** (cache) | Map: label→prob |
-| `context_responsibilities` | responsibilities | **yes** (cache) | Map: label→prob |
+| `predicted_context_probabilities_vector` | predicted | **yes** (cache) | row vector |
+| `predicted_context_probabilities_map` | predicted | **yes** (cache) | Map: label→prob |
+| `responsibilities_vector` | responsibilities | **yes** (cache) | row vector |
+| `responsibilities_map` | responsibilities | **yes** (cache) | Map: label→prob |
 | `sampled_context_count` | context mode | **yes** (cache) | Map: label→freq |
 | `predicted_context_probabilities_local` | predicted | no | row vector |
 | `context_responsibilities_local` | responsibilities | no | row vector |
 | `sampled_context_count_local` | context mode | no | row vector |
 
+- The `_vector`/`_map` suffixes were introduced to disambiguate the return type. The old
+  names `predicted_context_probabilities` / `responsibilities` (row vectors) and
+  `context_predicted_probabilities` / `context_responsibilities` (maps) remain as
+  deprecation-warning aliases forwarding to the suffixed methods.
 - Global variants call `contextProbabilityVector(kind)` → `ensureContextAlignment` (lazy, cached).
 - Local variants call `localContextProbabilityVector(kind)` over **modal** particles only — no
   alignment, no cache mutation. Intended for live monitoring where absolute labels don't matter.

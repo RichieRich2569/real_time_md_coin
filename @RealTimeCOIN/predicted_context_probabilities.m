@@ -1,21 +1,23 @@
 function p = predicted_context_probabilities(obj)
-%PREDICTED_CONTEXT_PROBABILITIES Predicted per-context probabilities (row vector).
+%PREDICTED_CONTEXT_PROBABILITIES (deprecated) Alias for the *_VECTOR form.
 %
-%   p = predicted_context_probabilities(obj) returns a 1-by-(max_contexts+1)
-%   row vector of the prior (pre-observation) context probabilities for the
-%   current trial, averaged over particles and mapped into the aligned
-%   global-context frame. The trailing entry is the novel-context probability.
-%   This triggers (and caches) the lazy context alignment.
+%   Kept for backward compatibility. Forwards to
+%   predicted_context_probabilities_vector and emits a one-time deprecation
+%   warning per session. Prefer the explicit *_vector (row vector) or *_map
+%   (containers.Map) name to disambiguate the return type at the call site.
 %
-%   Note on the confusingly similar name: this returns a VECTOR, whereas
-%   CONTEXT_PREDICTED_PROBABILITIES returns a containers.Map keyed by global
-%   context label. See CONTEXT_PREDICTED_PROBABILITIES for the map form and
-%   RESPONSIBILITIES for the posterior (post-observation) counterpart.
-%
-%   See also CONTEXT_PREDICTED_PROBABILITIES, RESPONSIBILITIES,
-%   PREDICTED_CONTEXT_PROBABILITIES_LOCAL, CONTEXT_ALIGNMENT.
+%   See also PREDICTED_CONTEXT_PROBABILITIES_VECTOR,
+%   PREDICTED_CONTEXT_PROBABILITIES_MAP.
     arguments
         obj (1, 1) RealTimeCOIN
     end
-    p = contextProbabilityVector(obj, "predicted");
+    persistent warned
+    if isempty(warned)
+        warning("RealTimeCOIN:DeprecatedMethod", ...
+            "predicted_context_probabilities is deprecated; use " + ...
+            "predicted_context_probabilities_vector (row vector) or " + ...
+            "predicted_context_probabilities_map (containers.Map).");
+        warned = true;
+    end
+    p = obj.predicted_context_probabilities_vector();
 end

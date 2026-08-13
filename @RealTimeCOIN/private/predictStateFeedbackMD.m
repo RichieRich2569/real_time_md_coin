@@ -11,13 +11,12 @@ function predictStateFeedbackMD(obj)
 %   S is reused both as the resampling likelihood covariance and as the
 %   denominator of the Kalman gain in updateBeliefAboutStatesMD.
 
-    Cmax = obj.max_contexts + 1;
-    P = obj.num_particles;
     R = obj.observationNoiseCov();
 
     obj.D.state_feedback_mean = obj.D.state_mean + obj.D.bias;
-    % Add the common observation noise R to every context/particle innovation
-    % covariance. repmat broadcasts R across the Cmax*P slices (this materialises
-    % the full N-by-N-by-Cmax-by-P tensor - see "Deferred optimizations" note).
-    obj.D.state_feedback_cov = obj.D.state_cov + repmat(R, 1, 1, Cmax, P);
+    % Add the shared observation noise R to every context/particle innovation
+    % covariance via implicit expansion: R is N-by-N and state_cov is
+    % N-by-N-by-Cmax-by-P, so R broadcasts across the trailing context/particle
+    % dims - identical values to repmat(R,1,1,Cmax,P) without materialising it.
+    obj.D.state_feedback_cov = obj.D.state_cov + R;
 end

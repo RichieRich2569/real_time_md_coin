@@ -37,6 +37,11 @@ function sampleStatesMD(obj, y, obsMask)
         Ri_obs = obj.safeInverse(R_obs);
         obsPrecision = zeros(N, N);
         obsPrecision(obsIdx, obsIdx) = Ri_obs;
+        % Active-context posterior covariance Qi+obsPrecision is constant across
+        % the (context, particle) loop, so factor its inverse once instead of
+        % recomputing it for every active-context cell (bit-identical value).
+        postCovActive = obj.safeInverse(Qi + obsPrecision);
+        postCovActive = (postCovActive + postCovActive') ./ 2;
     end
 
     obj.D.previous_x_dynamics = zeros(N, Cmax, P);
@@ -72,8 +77,7 @@ function sampleStatesMD(obj, y, obsMask)
                 postMean = dynMean;
                 postCov = Q;
             else
-                postCov = obj.safeInverse(Qi + obsPrecision);
-                postCov = (postCov + postCov') ./ 2;
+                postCov = postCovActive;   % hoisted: context/particle-invariant
                 bias = obj.D.bias(:, c, p);
                 obsInfo = zeros(N, 1);
                 obsInfo(obsIdx) = Ri_obs * (yv(obsIdx) - bias(obsIdx));

@@ -105,14 +105,3 @@ function [mu, Sigma] = multiMoments(obj, weights, Cmax, P)
     Sigma = second - (mu * mu');
     Sigma = (Sigma + Sigma') ./ 2;
 end
-
-function mustBeScalarOrEmpty(x)
-%MUSTBESCALAROREMPTY Local validator: accept only a scalar or empty cue.
-%   Retained as a local copy (rather than the R2020b+ builtin of the same
-%   name) so the class validates identically on older MATLAB releases and
-%   emits the class-specific error identifier below.
-    if ~(isempty(x) || isscalar(x))
-        error('RealTimeCOIN:InvalidCue', ...
-            'q must be empty or a scalar cue label.');
-    end
-end

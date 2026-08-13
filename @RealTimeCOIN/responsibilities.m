@@ -1,20 +1,21 @@
 function p = responsibilities(obj)
-%RESPONSIBILITIES Posterior per-context responsibilities (row vector).
+%RESPONSIBILITIES (deprecated) Alias for RESPONSIBILITIES_VECTOR.
 %
-%   p = responsibilities(obj) returns a 1-by-(max_contexts+1) row vector of the
-%   posterior (post-observation) context probabilities for the current trial,
-%   averaged over particles and mapped into the aligned global-context frame.
-%   The trailing entry is the novel-context responsibility. This triggers (and
-%   caches) the lazy context alignment.
+%   Kept for backward compatibility. Forwards to responsibilities_vector and
+%   emits a one-time deprecation warning per session. Use the explicit
+%   responsibilities_vector (row vector) or responsibilities_map (containers.Map)
+%   to make the return type clear at the call site.
 %
-%   This returns a VECTOR; CONTEXT_RESPONSIBILITIES returns the same weights as a
-%   containers.Map keyed by global context label. PREDICTED_CONTEXT_PROBABILITIES
-%   is the prior (pre-observation) counterpart.
-%
-%   See also CONTEXT_RESPONSIBILITIES, PREDICTED_CONTEXT_PROBABILITIES,
-%   CONTEXT_RESPONSIBILITIES_LOCAL, CONTEXT_ALIGNMENT.
+%   See also RESPONSIBILITIES_VECTOR, RESPONSIBILITIES_MAP.
     arguments
         obj (1, 1) RealTimeCOIN
     end
-    p = contextProbabilityVector(obj, "responsibilities");
+    persistent warned
+    if isempty(warned)
+        warning("RealTimeCOIN:DeprecatedMethod", ...
+            "responsibilities is deprecated; use responsibilities_vector " + ...
+            "(row vector) or responsibilities_map (containers.Map).");
+        warned = true;
+    end
+    p = obj.responsibilities_vector();
 end

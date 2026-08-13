@@ -10,13 +10,8 @@ function W = nextTrialContextWeights(obj, qLabel)
 %   for their weight term, without mutating the model state. Dimension-agnostic:
 %   the transition and cue matrices have the same layout for the scalar and
 %   multi-dimensional pipelines. Used by the c*2 query methods.
-    Cmax = obj.max_contexts + 1;
     P = obj.num_particles;
-    prior = zeros(Cmax, P);
-    for p = 1:P
-        prior(:, p) = obj.D.local_transition_matrix(obj.D.context(p), :, p)';
-    end
-    prior = obj.normalizeColumns(prior);
+    prior = obj.currentTransitionPrior();
 
     if isempty(qLabel)
         W = prior;

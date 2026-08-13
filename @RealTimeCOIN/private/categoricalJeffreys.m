@@ -15,8 +15,5 @@ function d = categoricalJeffreys(obj, p, q)
     p = obj.normalizeProbability(p);
     q = obj.normalizeProbability(q);
     d = sum((p - q) .* log(p ./ q));
-    if ~isfinite(d)
-        d = realmax;  % sentinel: "infinitely divergent" but still finite
-    end
-    d = max(d, 0);    % divergence is non-negative; clip round-off below 0
+    d = jeffreysFiniteClip(d);   % finite sentinel + non-negativity clip
 end

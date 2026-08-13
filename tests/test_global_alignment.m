@@ -13,19 +13,19 @@ assert(isequal(alignment.assignment(1:2,2), [2;1]), 'Swapped particle should map
 assert(abs(alignment.global_contexts.state_mean(1) + 1) < 1e-6, 'Global context 1 prototype mismatch');
 assert(abs(alignment.global_contexts.state_mean(2) - 1) < 1e-6, 'Global context 2 prototype mismatch');
 
-resp = coin.context_responsibilities();
+resp = coin.responsibilities_map();
 assert(abs(resp(1) - 0.6) < 1e-12, 'Global responsibility for context 1 mismatch');
 assert(abs(resp(2) - 0.3) < 1e-12, 'Global responsibility for context 2 mismatch');
 assert(abs(resp(3) - 0.1) < 1e-12, 'Novel responsibility bucket mismatch');
 
-pred = coin.predicted_context_probabilities();
+pred = coin.predicted_context_probabilities_vector();
 assert(max(abs(pred(1:3) - [0.7 0.2 0.1])) < 1e-12, 'Global predicted probabilities mismatch');
 
 coinModal = testutil.alignmentFixture(true);
 alignmentModal = coinModal.context_alignment();
 assert(alignmentModal.K == 2, 'Modal subset should keep the two-context cardinality');
 assert(sum(alignmentModal.modal_particle_mask) == 3, 'Exactly three particles should be in the modal subset');
-respModal = coinModal.context_responsibilities();
+respModal = coinModal.responsibilities_map();
 assert(abs(respModal(1) - 0.6) < 1e-12, 'Non-modal particles should not dilute modal summaries');
 diagModal = coinModal.diagnostics();
 assert(size(diagModal.responsibilities, 2) == 3, 'Diagnostics should expose modal particles only');

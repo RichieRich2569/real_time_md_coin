@@ -26,11 +26,7 @@ function densities = state_feedback_given_context_probability(obj, values)
 
     densities = containers.Map('KeyType', 'double', 'ValueType', 'any');
     alignment = ensureContextAlignment(obj);
-    active = activeSummaryContexts(obj);
-    active = active(active <= alignment.K);
-    if isempty(active) && alignment.K > 0
-        active = 1;
-    end
+    active = clampActiveSummaryContexts(obj, alignment);
 
     if obj.state_dim == 1
         values = values(:)';
@@ -39,7 +35,8 @@ function densities = state_feedback_given_context_probability(obj, values)
         B = alignment.global_contexts.bias_mean;
         R = obj.sigma_sensory_noise^2;
         for c = active
-            densities(c) = obj.normal_pdf(values, M(c) + B(c), V(c) + R);
+            [m, v] = feedbackTransform(M(c), V(c), B(c), R);
+            densities(c) = obj.normal_pdf(values, m, v);
         end
         return;
     end
@@ -49,6 +46,7 @@ function densities = state_feedback_given_context_probability(obj, values)
     B = alignment.global_contexts.bias_mean;      % N-by-Km
     R = observationNoiseCov(obj);
     for c = active
-        densities(c) = gaussianPdfColumnsMD(obj, values, M(:,c) + B(:,c), V(:,:,c) + R);
+        [m, Vc] = feedbackTransform(M(:,c), V(:,:,c), B(:,c), R);
+        densities(c) = gaussianPdfColumnsMD(obj, values, m, Vc);
     end
 end

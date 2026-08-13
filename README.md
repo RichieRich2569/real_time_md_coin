@@ -11,6 +11,11 @@ filter internally, and produces contextual probabilities and state
 distributions on demand. Both scalar and multi‑dimensional states are
 supported.
 
+For Monte‑Carlo variance reduction, `RealTimeCOINEnsemble` wraps R
+independent `RealTimeCOIN` members that consume the identical
+observation stream and returns run‑averaged read‑outs — the real‑time
+analogue of the offline COIN's "runs".
+
 ## Repository layout
 
 * `@RealTimeCOIN/` – the real‑time class (a MATLAB *class folder*).
@@ -18,6 +23,10 @@ supported.
   every public method is its own `.m` file in the folder, and
   `@RealTimeCOIN/private/` holds the internal helpers. See the class
   doc‑comment for the full catalogue of query methods.
+* `@RealTimeCOINEnsemble/` – a multi‑run averaging wrapper over
+  `RealTimeCOIN` (same class‑folder layout). It orchestrates R seeded,
+  independent members and exposes run‑averaged queries plus a batch
+  `simulate`. See `docs/SPEC_ensemble.md` for the full contract.
 * `COIN.m` – the original **off‑line** COIN, kept unmodified as the
   reference / ground‑truth oracle that validation compares against.
 * `examples/` – plain‑text live scripts, run section‑by‑section in the
@@ -87,6 +96,36 @@ global alignment across particles, computed and cached on demand.
 
 Some read‑outs — retention / drift / bias densities and the scalar
 Kalman gains — are scalar‑model only (`state_dim == 1`).
+
+### Multi‑run ensembles
+
+`RealTimeCOINEnsemble` runs R independent members over the *same*
+observation stream and returns the equal‑weight average across runs of
+each single‑model quantity — the read‑out of the pooled mixture that
+gives every run weight `1/R`. It mirrors the `RealTimeCOIN` state‑machine
+API (`observe_q` / `observe_y`) and forwards every non‑ensemble
+constructor argument verbatim to each member.
+
+```matlab
+% runs, seed, max_cores, segment_length are ensemble params;
+% everything else (num_particles, max_contexts, …) is passed to each member.
+ens = RealTimeCOINEnsemble('runs', 30, 'seed', 101, 'num_particles', 100);
+
+for t = 1:numel(feedbacks)
+    ens.observe_q(cues(t));
+    ens.observe_y(feedbacks(t));
+    mo = ens.motor_output();          % run-averaged motor output
+end
+```
+
+Each member draws from its own reproducible RandStream substream (a pure
+function of `seed` and run index), so ensembles are bit‑reproducible for
+a given seed and numerically identical whether stepped serially or
+replayed in parallel. When the whole sequence is known ahead of time,
+`simulate(qSeq, ySeq)` batch‑replays all runs in one call (dispatched
+across workers with `parfor` when `max_cores > 0`) and returns per‑trial
+run‑averaged traces. See the ensemble sections of
+`examples/scalar_examples.m` for runnable demos.
 
 ## Testing
 

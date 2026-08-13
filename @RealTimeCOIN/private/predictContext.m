@@ -36,11 +36,13 @@ function predictContext(obj, q)
     % %#ok<*PROPLC> suppresses the "local variable D shadows property D" lint for
     % the whole file - the aliasing is intentional, not an accidental shadow.
     D = obj.D; %#ok<*PROPLC>
-    prior = zeros(Cmax, P);
-    for p = 1:P
-        % Prior = transition row out of the particle's current context.
-        prior(:,p) = D.local_transition_matrix(D.context(p), :, p)';
-    end
+    % Prior(:,p) = transition row out of particle p's current context. Gather all
+    % (context(p), :, p) rows at once via linear indexing over the particle axis;
+    % this is a pure reindex (no arithmetic), equivalent to the per-particle loop.
+    colOffset  = (0:Cmax-1)' * Cmax;             % Cmax-by-1 : (c-1)*Cmax
+    pageOffset = (0:P-1) * (Cmax * Cmax);        % 1-by-P    : (p-1)*Cmax^2
+    lin = D.context(:)' + colOffset + pageOffset; % Cmax-by-P linear indices into T
+    prior = D.local_transition_matrix(lin);
     obj.D.prior_probabilities = obj.normalizeColumns(prior);
 
     if isempty(q)
