@@ -1,150 +1,119 @@
-# Real‑Time COIN MATLAB Implementation
+# realtimecoin
 
-This repository provides a MATLAB re‑implementation of the Contextual
-Inference (COIN) motor‑learning model (Heald et al.), designed for
-*real‑time* / sequential operation. The original COIN code runs
-off‑line: the entire sequence of observations is generated inside the
-model before any inference is performed. In contrast, `RealTimeCOIN`
-exposes a state‑machine API that is updated one observation at a time.
-It supports sequential cues and state feedback, maintains a particle
-filter internally, and produces contextual probabilities and state
-distributions on demand. Both scalar and multi‑dimensional states are
-supported.
+`realtimecoin` is a Python translation of the MATLAB `@RealTimeCOIN` class
+folder (kept on this repository's `main` branch): a real-time (sequential)
+implementation of the COIN
+(COntextual INference) model of motor learning -- Heald, Lengyel & Wolpert
+(2021), "Contextual inference underlies the learning of sensorimotor
+repertoires", *Nature* 600:489-493. Where the original COIN code is offline (it
+generates the whole observation sequence internally, then infers over the block),
+`RealTimeCOIN` exposes a state machine that consumes one trial at a time:
+`observe_q(q)` stages the sensory cue, `observe_y(y)` runs a full particle-filter
+update and advances the trial, and a catalogue of query methods reads out the
+current posterior and predictive summaries. Scalar and multi-dimensional latent
+states are both supported, along with a run-averaging ensemble wrapper. Only
+`numpy` and `scipy` are required.
 
-For Monte‑Carlo variance reduction, `RealTimeCOINEnsemble` wraps R
-independent `RealTimeCOIN` members that consume the identical
-observation stream and returns run‑averaged read‑outs — the real‑time
-analogue of the offline COIN's "runs".
+## Install
 
-## Repository layout
-
-* `@RealTimeCOIN/` – the real‑time class (a MATLAB *class folder*).
-  `RealTimeCOIN.m` holds the `classdef` (properties + static helpers);
-  every public method is its own `.m` file in the folder, and
-  `@RealTimeCOIN/private/` holds the internal helpers. See the class
-  doc‑comment for the full catalogue of query methods.
-* `@RealTimeCOINEnsemble/` – a multi‑run averaging wrapper over
-  `RealTimeCOIN` (same class‑folder layout). It orchestrates R seeded,
-  independent members and exposes run‑averaged queries plus a batch
-  `simulate`. See `docs/SPEC_ensemble.md` for the full contract.
-* `COIN.m` – the original **off‑line** COIN, kept unmodified as the
-  reference / ground‑truth oracle that validation compares against.
-* `examples/` – plain‑text live scripts, run section‑by‑section in the
-  MATLAB Editor: `scalar_examples.m` (scalar demos) and
-  `md_examples.m` (multi‑dimensional demos). The `+coinviz` package
-  holds shared plotting helpers.
-* `tests/` – fast behavioural tests written as plain functions (not
-  `matlab.unittest`) to minimise dependencies, plus `run_tests.m`.
-* `validation/` – scientific validators that report metrics and pass
-  flags against `COIN.m` (`run_validation.m`, `validate_*.m`).
-* `startup.m` – compiles and paths the third‑party dependencies
-  (`lightspeed` and `npbayes-r21`) via MEX.
-* `CODE_REVIEW.md` – a detailed, verified code review of
-  `@RealTimeCOIN`: the deepest available map of the algorithm, the
-  particle‑state layout, and known subtleties.
-
-## Setup
-
-Core `RealTimeCOIN` use only needs the repository root on the path.
-The `lightspeed` and `npbayes-r21` MEX dependencies and `COIN.m` are
-required only by the off‑line reference and some validation scripts.
-On a fresh clone / new machine, run `startup` once to compile the MEX
-dependencies:
-
-```matlab
-startup            % compiles lightspeed + npbayes-r21 MEX, adds them to path
-addpath(pwd)       % put the repo root on the path so RealTimeCOIN resolves
+```
+pip install -e .[test]
 ```
 
-## Usage
+(`pip install -e .` without the `[test]` extra if you do not need
+`pytest`.) Python 3.10 or newer; the runtime dependencies are `numpy>=1.24` and
+`scipy>=1.10`.
 
-The API mimics a state machine, driven one trial at a time:
+## Quickstart
 
-1. `observe_q(q)` – stage the cue for the upcoming trial.
-2. `observe_y(y)` – process feedback; this advances the trial and runs
-   the full inference pipeline. `[]` or `NaN` is a missing observation
-   (still a trial).
-3. Query methods read out the current posterior / predictive summaries.
+```python
+import numpy as np
+from realtimecoin import RealTimeCOIN
 
-```matlab
-coin = RealTimeCOIN('num_particles', 200, 'max_contexts', 5, 'infer_bias', true);
+model = RealTimeCOIN(num_particles=200, max_contexts=5, rng=0)
 
-cues      = [1 1 2 2 1 3 1];
-feedbacks = [0.2 0.2 0.5 0.5 0.2 -0.1 0.2];   % noisy scalar feedback per trial
-grid      = linspace(-1.5, 1.5, 201);
+rng = np.random.default_rng(1)
+for t in range(60):
+    perturbation = 0.0 if t < 30 else 1.0       # a step change halfway through
+    model.observe_q(1.0 if t < 30 else 2.0)     # stage the cue for this trial
+    model.observe_y(perturbation + 0.03 * rng.standard_normal())
 
-for t = 1:numel(cues)
-    coin.observe_q(cues(t));
-    coin.observe_y(feedbacks(t));
+print(model.Trial)                              # 60
+print(model.motor_output())                     # expected state feedback
+print(model.responsibilities_map())             # {global context label: weight}
 
-    dens = coin.state_probability(grid);      % posterior state density on the grid
-    resp = coin.responsibilities;             % per-context responsibilities
-end
+grid = np.linspace(-1.0, 2.0, 121)
+density = model.state_feedback_probability(grid)          # (121,) densities
+
+model.save_model("coin_model.npz", set_stationary=False)  # exact current state
+restored = RealTimeCOIN()
+restored.load_model("coin_model.npz")
+print(restored.Trial)                           # 60 - resumes where it left off
 ```
 
-For runnable, annotated demos see `examples/scalar_examples.m` and
-`examples/md_examples.m` (open in the Editor and run section by section).
+`save_model` defaults to `set_stationary=True`, which writes a
+contingency-independent stationary prior instead of the live posterior; pass
+`set_stationary=False` (as above) to checkpoint a run in progress.
 
-### Scalar vs multi‑dimensional
+## Documentation
 
-The state dimension is set via the `state_dim` constructor argument.
-`state_dim == 1` runs the original scalar pipeline verbatim (this is the
-regression baseline validated against `COIN.m`); `state_dim > 1` runs
-the multi‑dimensional (`*MD`) variants of the pipeline. Context labels
-are per‑particle and arbitrary, so context‑facing summaries use a lazy
-global alignment across particles, computed and cached on demand.
+- [`docs/usage.md`](docs/usage.md) -- the guide: the generative model and the
+  per-trial pipeline, the state-machine API, the full constructor-parameter
+  table, the query catalogue, scalar vs multi-dimensional dispatch, context
+  alignment, persistence, the ensemble, the validation suite, and the
+  differences from the MATLAB original.
+- [`docs/api_mapping.md`](docs/api_mapping.md) -- a MATLAB method to Python call
+  mapping for `@RealTimeCOIN` and `@RealTimeCOINEnsemble`.
 
-Some read‑outs — retention / drift / bias densities and the scalar
-Kalman gains — are scalar‑model only (`state_dim == 1`).
+## Package layout
 
-### Multi‑run ensembles
+| Module | Contents |
+| --- | --- |
+| `realtimecoin/model.py` | the `RealTimeCOIN` facade: state machine, validation, delegation |
+| `realtimecoin/state.py` | `ParticleState` (the particle arrays) and the array-shape contract |
+| `realtimecoin/context.py` | the dimension-agnostic context-prediction step |
+| `realtimecoin/pipeline_scalar.py` | the `state_dim == 1` per-trial pipeline |
+| `realtimecoin/pipeline_md.py` | the multi-dimensional (`*MD`) per-trial pipeline |
+| `realtimecoin/queries_core.py` | point predictions, moments, `c*` traces, local context summaries |
+| `realtimecoin/queries_density.py` | densities and CDFs |
+| `realtimecoin/queries_aligned.py` | context summaries that need the global alignment |
+| `realtimecoin/alignment.py` | the cross-particle context alignment |
+| `realtimecoin/persist.py` | snapshot / save / load / stationarisation |
+| `realtimecoin/samplers.py` | random samplers (gamma, beta, Dirichlet, matrix-normal, ...) |
+| `realtimecoin/numerics.py` | deterministic numerical helpers (PD repair, jittered Cholesky, ...) |
+| `realtimecoin/statics.py` | the public static helpers (resampling, normal pdf/cdf, log-sum-exp, ...) |
+| `realtimecoin/exceptions.py` | the error hierarchy, carrying the MATLAB error identifiers |
 
-`RealTimeCOINEnsemble` runs R independent members over the *same*
-observation stream and returns the equal‑weight average across runs of
-each single‑model quantity — the read‑out of the pooled mixture that
-gives every run weight `1/R`. It mirrors the `RealTimeCOIN` state‑machine
-API (`observe_q` / `observe_y`) and forwards every non‑ensemble
-constructor argument verbatim to each member.
+## Tests
 
-```matlab
-% runs, seed, max_cores, segment_length are ensemble params;
-% everything else (num_particles, max_contexts, …) is passed to each member.
-ens = RealTimeCOINEnsemble('runs', 30, 'seed', 101, 'num_particles', 100);
-
-for t = 1:numel(feedbacks)
-    ens.observe_q(cues(t));
-    ens.observe_y(feedbacks(t));
-    mo = ens.motor_output();          % run-averaged motor output
-end
+```
+pytest
 ```
 
-Each member draws from its own reproducible RandStream substream (a pure
-function of `seed` and run index), so ensembles are bit‑reproducible for
-a given seed and numerically identical whether stepped serially or
-replayed in parallel. When the whole sequence is known ahead of time,
-`simulate(qSeq, ySeq)` batch‑replays all runs in one call (dispatched
-across workers with `parfor` when `max_cores > 0`) and returns per‑trial
-run‑averaged traces. See the ensemble sections of
-`examples/scalar_examples.m` for runnable demos.
+Fast behavioural and numerical tests covering the samplers, both pipelines, the
+query catalogue, alignment, persistence and the validators.
 
-## Testing
+## Validation
 
-Run the fast behavioural tests:
-
-```matlab
-cd tests; run_tests            % runs every tests/test_*.m
+```
+python -m validation.run_validation
 ```
 
-Run the scientific validation suite (slower; compares against `COIN.m`):
+The scientific validation suite: analytic Kalman-filter oracles for the scalar
+and multi-dimensional models, probability-integral-transform self-calibration,
+particle-count convergence, context recovery from synthetic data, behavioural
+stress cases, and a wall-clock benchmark. Each stage reports metrics and a
+`passed` flag rather than asserting; `run(strict=True)` turns a failing suite
+into a `RuntimeError`. See the validation section of
+[`docs/usage.md`](docs/usage.md) for what each stage checks and what gates it.
 
-```matlab
-validation/run_validation                       % compact suite, returns a results struct
-run_validation('Strict', true, 'MakePlots', true)
-```
+## Licence and provenance
 
-## Notes
-
-The code is written to be as clear as possible rather than
-micro‑optimised; heavy use of vectorisation and pre‑allocation can
-improve performance for large particle counts. See `CODE_REVIEW.md` for
-a thorough walkthrough of the algorithm and its implementation.
+This package is a translation of the MATLAB `@RealTimeCOIN` implementation on
+this repository's `main` branch, which in turn re-implements the COIN model of
+Heald, Lengyel &
+Wolpert (2021) for sequential operation. Parts of the random samplers were
+adapted, by way of COINRL, from Changmin Yu's `COIN_Python` port of the original
+COIN code, which is distributed under the GNU General Public License v3. Those
+parts carry their GPL-3 terms with them, so redistribution of this package
+should follow GPL-3.
