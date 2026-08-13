@@ -2,8 +2,9 @@
 
 A structured review of the `@RealTimeCOIN` MATLAB class and its `tests/` and `validation/`
 suites. The project is a **real-time / sequential** re-implementation of the COIN (COntextual
-INference) motor-learning model (Heald et al.). The original offline `COIN.m` at the repo root is
-retained unmodified as the reference ground truth.
+INference) motor-learning model (Heald et al.).
+
+This review was largely written with agentic AI, and verified post implementation.
 
 > **How to read the "Flags" (§6–§7).** Every flagged item was checked against the source. The
 > descriptive catalog (§2–§5) was assembled with the help of automated exploration; the *findings*
@@ -35,6 +36,7 @@ Per trial:
 
 ### Per-trial pipeline (identical order in both branches — verified `observe_y.m:10-34`)
 
+Follows original COIN pipeline. See original paper by Heald et al. for a description of the Particle Learning algorithm applied to contextual inference.
 ```
 predictContext → predictStates → predictStateFeedback → resampleParticles
   → sampleContext → updateBeliefAboutStates → sampleStates
@@ -56,8 +58,7 @@ does **not** feed back into inference.
 
 ## 2. Classes & Properties
 
-There is a single class: **`RealTimeCOIN`** (`< handle`). (`COIN.m` at the repo root is the separate,
-unmodified reference and is out of scope.)
+There is a single class: **`RealTimeCOIN`** (`< handle`).
 
 ### Public properties — hyperparameters (defaults from `RealTimeCOIN.m:10-47`)
 
@@ -74,9 +75,9 @@ unmodified reference and is out of scope.)
 | `prior_mean_retention` | 0.9425 | prior mean of retention `a` |
 | `prior_mean_drift` | 0.0 | prior mean of drift `d` |
 | `prior_mean_bias` | 0.0 | prior mean of bias |
-| `prior_precision_retention` | `837.1²` | prior precision of `a` |
-| `prior_precision_drift` | `1222.7²` | prior precision of `d` |
-| `prior_precision_bias` | `70²` | prior precision of bias |
+| `prior_precision_retention` | `837.1²` | prior precision of `a` (MD case has prior `A=a*I`) |
+| `prior_precision_drift` | `1222.7²` | prior precision of `d` (MD case has prior `d=d*1`, where `1` is a one vector)|
+| `prior_precision_bias` | `70²` | prior precision of bias (MD case has prior `b=b*1`, where `1` is a one vector)|
 | `sigma_process_noise` | 0.0089 | process-noise std |
 | `sigma_sensory_noise` | 0.03 | sensory-noise std |
 | `sigma_motor_noise` | 0.0 | motor-noise std |
