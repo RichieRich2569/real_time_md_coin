@@ -14,6 +14,7 @@ dependencies = [
 ]
 authors = [{name="Richard Marques Monteiro", email="rm967@cam.ac.uk"}]
 license = "MIT"
+license-files = ["LICENSE"]
 urls = {Repository = "https://github.com/RichieRich2569/real_time_md_coin"}
 
 [project.optional-dependencies]
