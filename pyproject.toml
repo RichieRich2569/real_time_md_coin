@@ -12,6 +12,9 @@ dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
 ]
+authors = [{name="Richard Marques Monteiro", email="rm967@cam.ac.uk"}]
+license = "MIT"
+urls = {Repository = "https://github.com/RichieRich2569/real_time_md_coin"}
 
 [project.optional-dependencies]
 test = [
@@ -20,6 +23,9 @@ test = [
 
 [tool.setuptools.packages.find]
 include = ["realtimecoin*"]
+
+[tool.setuptools.package-data]
+realtimecoin = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
