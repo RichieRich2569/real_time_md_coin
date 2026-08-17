@@ -109,11 +109,24 @@ into a `RuntimeError`. See the validation section of
 
 ## Licence and provenance
 
-This package is a translation of the MATLAB `@RealTimeCOIN` implementation on
-this repository's `main` branch, which in turn re-implements the COIN model of
-Heald, Lengyel &
-Wolpert (2021) for sequential operation. Parts of the random samplers were
-adapted, by way of COINRL, from Changmin Yu's `COIN_Python` port of the original
-COIN code, which is distributed under the GNU General Public License v3. Those
-parts carry their GPL-3 terms with them, so redistribution of this package
-should follow GPL-3.
+Copyright (C) 2026 Richard Marques Monteiro.
+
+`realtimecoin` is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the [`LICENSE`](LICENSE) file, or
+<https://www.gnu.org/licenses/>, for the full terms.
+
+The GPL-3 terms are inherited, not chosen. This package is a translation of the
+MATLAB `@RealTimeCOIN` implementation on this repository's `main` branch, which
+in turn re-implements the COIN model of Heald, Lengyel & Wolpert (2021) for
+sequential operation. Parts of the random samplers in
+[`realtimecoin/samplers.py`](realtimecoin/samplers.py) were adapted, by way of
+COINRL, from Changmin Yu's [`COIN_Python`](https://github.com/changmin-yu/COIN_Python)
+port (Copyright (C) 2024 Changmin Yu, "version 3 of the License, or (at your
+option) any later version"), which itself derives from James Heald's original
+[MATLAB COIN implementation](https://github.com/jamesheald/COIN), licensed
+GPL-3.0. Because that code is copyleft, the work as a whole is conveyed under
+the same terms.

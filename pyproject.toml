@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,9 +13,23 @@ dependencies = [
     "scipy>=1.10",
 ]
 authors = [{name="Richard Marques Monteiro", email="rm967@cam.ac.uk"}]
-license = "MIT"
+license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 urls = {Repository = "https://github.com/RichieRich2569/real_time_md_coin"}
+keywords = ["COIN", "contextual inference", "motor learning", "particle filter", "Bayesian"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
 
 [project.optional-dependencies]
 test = [
