@@ -11,6 +11,10 @@
 # Compiled MEX files
 *.mex*
 
+# Pycache files
+__pycache__/
+*.pyc
+
 # Packaged app and toolbox files
 *.mlappinstall
 *.mltbx
